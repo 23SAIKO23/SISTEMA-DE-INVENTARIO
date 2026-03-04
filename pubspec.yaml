@@ -63,6 +63,13 @@ flutter:
   #   - images/a_dot_ham.jpeg
   assets:
     - android/app/src/loginimg.png
+    - assets/images/aguayo_fondo.png
+    - assets/images/card_texture.png
+    - assets/images/aguayo_rojo.png
+    - assets/images/aguayo_azul.png
+    - assets/images/aguayo_verde.png
+    - assets/images/aguayo_morado.png
+    - assets/images/aguayo_naranja.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
