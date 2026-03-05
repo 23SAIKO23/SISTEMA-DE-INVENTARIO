@@ -1,5 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'screens/presentacion.dart';
+import 'clientes/clientes_page.dart';
+import 'ventas/ventas_page.dart';
 
 void main() {
   runApp(const MyApp());
@@ -24,6 +26,8 @@ class MyApp extends StatelessWidget {
       home: const SplashScreen(),
       routes: {
         '/home': (_) => const HomePage(),
+        '/clientes': (_) => const ClientesPage(),
+        '/ventas': (_) => const VentasPage(),
       },
     );
   }
@@ -616,7 +620,7 @@ class _ModuloCardState extends State<_ModuloCard>
         onTapDown: (_) => _tapCtrl.reverse(),
         onTapUp: (_) {
           _tapCtrl.forward();
-          // Navigator.pushNamed(context, m.ruta);
+          Navigator.pushNamed(context, m.ruta);
         },
         onTapCancel: () => _tapCtrl.forward(),
         child: AnimatedBuilder(
