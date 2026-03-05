@@ -2,6 +2,7 @@
 import 'screens/presentacion.dart';
 import 'clientes/clientes_page.dart';
 import 'ventas/ventas_page.dart';
+import 'cobranza/cobranza.dart';
 
 void main() {
   runApp(const MyApp());
@@ -25,9 +26,10 @@ class MyApp extends StatelessWidget {
       ),
       home: const SplashScreen(),
       routes: {
-        '/home': (_) => const HomePage(),
-        '/clientes': (_) => const ClientesPage(),
-        '/ventas': (_) => const VentasPage(),
+        '/home':       (_) => const HomePage(),
+        '/clientes':   (_) => const ClientesPage(),
+        '/ventas':     (_) => const VentasPage(),
+        '/cobranzas':  (_) => const CobranzaHubPage(),
       },
     );
   }
@@ -771,6 +773,211 @@ class _ModuloCardState extends State<_ModuloCard>
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+//  Hub de Cobranza — 3 sub-módulos
+// ─────────────────────────────────────────────
+class CobranzaHubPage extends StatelessWidget {
+  const CobranzaHubPage({super.key});
+
+  static const _kAzul       = Color(0xFF1565C0);
+  static const _kAzulClaro  = Color(0xFF42A5F5);
+  static const _kVerde      = Color(0xFF00C853);
+  static const _kVerdeClaro = Color(0xFF69F0AE);
+  static const _kFondo      = Color(0xFF0A1628);
+  static const _kFondo2     = Color(0xFF0D2145);
+
+  @override
+  Widget build(BuildContext context) {
+    final opciones = [
+      _HubOpcion(
+        titulo: 'Pagos Parciales',
+        subtitulo: 'Control de cuentas por cobrar',
+        icono: Icons.account_balance_wallet_rounded,
+        colores: const [_kAzul, _kAzulClaro],
+        destino: const PagosParciales(),
+      ),
+      _HubOpcion(
+        titulo: 'Clientes con Deuda',
+        subtitulo: 'Lista y fechas de pago',
+        icono: Icons.people_alt_rounded,
+        colores: const [Color(0xFFF59E0B), Color(0xFFFBBF24)],
+        destino: const ListaDeudores(),
+      ),
+      _HubOpcion(
+        titulo: 'Historial de Pagos',
+        subtitulo: 'Línea de tiempo por cliente',
+        icono: Icons.receipt_long_rounded,
+        colores: const [_kVerde, _kVerdeClaro],
+        destino: const HistorialPagos(),
+      ),
+    ];
+
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [_kFondo, _kFondo2],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // ── AppBar ────────────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 16, 4),
+                child: Row(children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                        color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ShaderMask(
+                        shaderCallback: (b) => const LinearGradient(
+                          colors: [_kAzulClaro, _kVerdeClaro],
+                        ).createShader(b),
+                        child: const Text('COBRANZA',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 2.5)),
+                      ),
+                      Text('Gestión de cobros y pagos',
+                          style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.45),
+                              fontSize: 10,
+                              letterSpacing: 1)),
+                    ],
+                  ),
+                ]),
+              ),
+              // Franja decorativa
+              Container(
+                height: 3,
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                      colors: [_kAzul, _kAzulClaro, _kVerde, _kVerdeClaro]),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              const SizedBox(height: 28),
+
+              // ── Tarjetas de sub-módulos ───
+              Expanded(
+                child: ListView.separated(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  itemCount: opciones.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 14),
+                  itemBuilder: (_, i) => _TarjetaHub(opcion: opciones[i]),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HubOpcion {
+  final String titulo;
+  final String subtitulo;
+  final IconData icono;
+  final List<Color> colores;
+  final Widget destino;
+  const _HubOpcion({
+    required this.titulo,
+    required this.subtitulo,
+    required this.icono,
+    required this.colores,
+    required this.destino,
+  });
+}
+
+class _TarjetaHub extends StatelessWidget {
+  final _HubOpcion opcion;
+  const _TarjetaHub({required this.opcion});
+
+  @override
+  Widget build(BuildContext context) {
+    final c1 = opcion.colores[0];
+    final c2 = opcion.colores[1];
+
+    return GestureDetector(
+      onTap: () => Navigator.push(
+          context, MaterialPageRoute(builder: (_) => opcion.destino)),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0D2145),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: c1.withValues(alpha: 0.50), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+                color: c1.withValues(alpha: 0.15),
+                blurRadius: 20,
+                offset: const Offset(0, 5)),
+          ],
+        ),
+        child: Row(children: [
+          Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                  colors: [c1, c2],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                    color: c1.withValues(alpha: 0.50),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4)),
+              ],
+            ),
+            child: Icon(opcion.icono, color: Colors.white, size: 28),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(opcion.titulo,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16)),
+                const SizedBox(height: 4),
+                Text(opcion.subtitulo,
+                    style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.50),
+                        fontSize: 12)),
+              ],
+            ),
+          ),
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: c1.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: c1.withValues(alpha: 0.40)),
+            ),
+            child: Icon(Icons.arrow_forward_ios_rounded, color: c1, size: 14),
+          ),
+        ]),
       ),
     );
   }

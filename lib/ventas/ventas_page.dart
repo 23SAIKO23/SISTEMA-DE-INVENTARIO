@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'modelos_venta.dart';
+import '../services/app_service.dart';
 
 export 'modelos_venta.dart';
 
 // ── Paleta azul / verde / blanco ──────────────
-const _kAzul     = Color(0xFF1565C0);   // azul fuerte
-const _kAzulClaro = Color(0xFF42A5F5);  // azul cielo
-const _kVerde    = Color(0xFF00C853);   // verde vibrante
-const _kVerdeClaro = Color(0xFF69F0AE); // verde menta
-const _kFondo    = Color(0xFF0A1628);   // azul noche muy oscuro
-const _kFondo2   = Color(0xFF0D2145);   // azul noche medio
+const _kAzul      = Color(0xFF1565C0);
+const _kAzulClaro = Color(0xFF42A5F5);
+const _kVerde     = Color(0xFF00C853);
+const _kVerdeClaro= Color(0xFF69F0AE);
+const _kFondo     = Color(0xFF0A1628);
+const _kFondo2    = Color(0xFF0D2145);
 
 // ─────────────────────────────────────────────
 //  Página principal de Ventas
@@ -21,41 +22,27 @@ class VentasPage extends StatefulWidget {
 }
 
 class _VentasPageState extends State<VentasPage> {
-  final List<Venta> _ventas = [
-    Venta(
-      id: '001', cliente: 'Tienda Don Pepe',
-      tipo: TipoProducto.doble, color: 'Rojo / Negro',
-      cantidad: 5, destino: 'Av. Potosí 123',
-      precioUnit: 120, pago: ModalidadPago.credito,
-      montoPagado: 100, fecha: DateTime(2025, 3, 1),
-    ),
-    Venta(
-      id: '002', cliente: 'Doña Carmen',
-      tipo: TipoProducto.simple, color: 'Azul / Blanco',
-      cantidad: 3, destino: 'Calle Junín 45',
-      precioUnit: 80, pago: ModalidadPago.parcial,
-      montoPagado: 180, fecha: DateTime(2025, 3, 3),
-    ),
-    Venta(
-      id: '003', cliente: 'Distribuidora Alteña',
-      tipo: TipoProducto.metros, color: 'Verde / Amarillo',
-      cantidad: 10, destino: 'El Alto, 16 de Julio',
-      precioUnit: 35, pago: ModalidadPago.contado,
-      montoPagado: 350, fecha: DateTime(2025, 2, 20),
-    ),
-    Venta(
-      id: '004', cliente: 'Tienda La Estrella',
-      tipo: TipoProducto.doble, color: 'Morado / Rosa',
-      cantidad: 2, destino: 'Mercado Rodríguez',
-      precioUnit: 150, pago: ModalidadPago.credito,
-      montoPagado: 0, fecha: DateTime(2025, 3, 5),
-    ),
-  ];
+  final _svc = AppService.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _svc.addListener(_onUpdate);
+  }
+
+  @override
+  void dispose() {
+    _svc.removeListener(_onUpdate);
+    super.dispose();
+  }
+
+  void _onUpdate() => setState(() {});
 
   @override
   Widget build(BuildContext context) {
-    final totalVentas    = _ventas.fold(0.0, (s, v) => s + v.total);
-    final totalPendiente = _ventas.fold(0.0, (s, v) => s + v.pendiente);
+    final ventas         = _svc.ventas;
+    final totalVentas    = _svc.totalVentas;
+    final totalPendiente = _svc.totalPendiente;
 
     return Scaffold(
       body: Container(
@@ -72,8 +59,7 @@ class _VentasPageState extends State<VentasPage> {
 
               // ── AppBar manual ────────────────
               Padding(
-                padding:
-                    const EdgeInsets.fromLTRB(8, 8, 16, 4),
+                padding: const EdgeInsets.fromLTRB(8, 8, 16, 4),
                 child: Row(
                   children: [
                     IconButton(
@@ -140,20 +126,48 @@ class _VentasPageState extends State<VentasPage> {
                 ),
               ),
 
+              // ── Banner de sincronización ──────
+              if (_svc.pendientes.isNotEmpty)
+                Container(
+                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: _kAzul.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                        color: _kAzulClaro.withValues(alpha: 0.40)),
+                  ),
+                  child: Row(children: [
+                    const Icon(Icons.sync_rounded,
+                        color: _kAzulClaro, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${_svc.pendientes.length} venta(s) a crédito/parcial '
+                        'sincronizadas con Cobranza',
+                        style: const TextStyle(
+                            color: _kAzulClaro,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ]),
+                ),
+
               // ── Lista de pedidos ─────────────
               Expanded(
-                child: _ventas.isEmpty
+                child: ventas.isEmpty
                     ? Center(
                         child: Text('Sin pedidos',
                             style: TextStyle(
                                 color: Colors.white.withValues(alpha: 0.35))))
                     : ListView.builder(
-                        padding:
-                            const EdgeInsets.fromLTRB(16, 0, 16, 100),
-                        itemCount: _ventas.length,
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                        itemCount: ventas.length,
                         itemBuilder: (_, i) => _TarjetaVenta(
-                          venta: _ventas[i],
-                          onAbonar: () => _abonar(context, _ventas[i]),
+                          venta: ventas[i],
+                          onAbonar: () => _abonar(context, ventas[i]),
                         ),
                       ),
               ),
@@ -173,9 +187,10 @@ class _VentasPageState extends State<VentasPage> {
     );
   }
 
-  // ── Registrar abono ───────────────────────
+  // ── Registrar abono (via AppService) ─────────
   void _abonar(BuildContext ctx, Venta v) {
     final ctrl = TextEditingController();
+    final notaCtrl = TextEditingController();
     showDialog(
       context: ctx,
       builder: (_) => AlertDialog(
@@ -223,33 +238,11 @@ class _VentasPageState extends State<VentasPage> {
               ]),
             ),
             const SizedBox(height: 14),
-            TextField(
-              controller: ctrl,
-              autofocus: true,
-              keyboardType: TextInputType.number,
-              style: const TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.w700),
-              decoration: InputDecoration(
-                labelText: 'Monto del abono (Bs)',
-                labelStyle: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.50), fontSize: 12),
-                prefixText: 'Bs  ',
-                prefixStyle: const TextStyle(
-                    color: _kVerdeClaro, fontWeight: FontWeight.w700),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.15)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide:
-                      const BorderSide(color: _kAzulClaro, width: 2),
-                ),
-                filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.06),
-              ),
-            ),
+            _Input(ctrl: ctrl, label: 'Monto del abono (Bs)',
+                icono: Icons.attach_money_rounded, numerico: true),
+            const SizedBox(height: 8),
+            _Input(ctrl: notaCtrl, label: 'Nota (opcional)',
+                icono: Icons.notes_rounded),
           ],
         ),
         actions: [
@@ -269,8 +262,8 @@ class _VentasPageState extends State<VentasPage> {
             onPressed: () {
               final m = double.tryParse(ctrl.text) ?? 0;
               if (m > 0) {
-                setState(() =>
-                    v.montoPagado = (v.montoPagado + m).clamp(0, v.total));
+                // ← usa AppService para actualizar y notificar a cobranza
+                _svc.registrarAbono(v.id, m, nota: notaCtrl.text.trim());
               }
               Navigator.pop(ctx);
             },
@@ -289,8 +282,8 @@ class _VentasPageState extends State<VentasPage> {
     final cantCtrl    = TextEditingController();
     final destCtrl    = TextEditingController();
     final precioCtrl  = TextEditingController();
-    TipoProducto tipo  = TipoProducto.simple;
-    ModalidadPago pago  = ModalidadPago.contado;
+    TipoProducto tipo = TipoProducto.simple;
+    ModalidadPago pago = ModalidadPago.contado;
 
     showModalBottomSheet(
       context: ctx,
@@ -323,7 +316,7 @@ class _VentasPageState extends State<VentasPage> {
                       ),
                     ),
                   ),
-                  // Línea decorativa + título
+                  // Título
                   Row(children: [
                     Container(
                       width: 4, height: 22,
@@ -356,8 +349,7 @@ class _VentasPageState extends State<VentasPage> {
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 180),
                           margin: const EdgeInsets.only(right: 6),
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 11),
+                          padding: const EdgeInsets.symmetric(vertical: 11),
                           decoration: BoxDecoration(
                             color: sel
                                 ? c.withValues(alpha: 0.20)
@@ -405,6 +397,7 @@ class _VentasPageState extends State<VentasPage> {
                   ]),
                   const SizedBox(height: 12),
 
+                  // Forma de pago
                   _SecLabel('FORMA DE PAGO'),
                   const SizedBox(height: 6),
                   Row(children: [
@@ -420,6 +413,34 @@ class _VentasPageState extends State<VentasPage> {
                         activo: pago == ModalidadPago.parcial,
                         onTap: () => setS(() => pago = ModalidadPago.parcial)),
                   ]),
+
+                  // Aviso si genera cobranza
+                  if (pago != ModalidadPago.contado) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _kAzul.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                            color: _kAzulClaro.withValues(alpha: 0.40)),
+                      ),
+                      child: Row(children: [
+                        const Icon(Icons.info_outline_rounded,
+                            color: _kAzulClaro, size: 14),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            'Esta venta aparecerá automáticamente en Cobranza',
+                            style: TextStyle(
+                                color: _kAzulClaro,
+                                fontSize: 11),
+                          ),
+                        ),
+                      ]),
+                    ),
+                  ],
                   const SizedBox(height: 20),
 
                   SizedBox(
@@ -428,32 +449,28 @@ class _VentasPageState extends State<VentasPage> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _kVerde,
                         foregroundColor: Colors.white,
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 14),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14)),
                       ),
                       onPressed: () {
                         if (clienteCtrl.text.trim().isEmpty) return;
-                        final cant =
-                            double.tryParse(cantCtrl.text) ?? 1;
-                        final precio =
-                            double.tryParse(precioCtrl.text) ?? 0;
-                        setState(() {
-                          _ventas.insert(0, Venta(
-                            id: '${_ventas.length + 1}'.padLeft(3, '0'),
-                            cliente: clienteCtrl.text.trim(),
-                            tipo: tipo,
-                            color: colorCtrl.text.trim(),
-                            cantidad: cant,
-                            destino: destCtrl.text.trim(),
-                            precioUnit: precio,
-                            pago: pago,
-                            montoPagado: pago == ModalidadPago.contado
-                                ? cant * precio : 0,
-                            fecha: DateTime.now(),
-                          ));
-                        });
+                        final cant = double.tryParse(cantCtrl.text) ?? 1;
+                        final precio = double.tryParse(precioCtrl.text) ?? 0;
+                        // ← agrega venta al AppService (se sincroniza con cobranza)
+                        _svc.agregarVenta(Venta(
+                          id: _svc.nuevoId(),
+                          cliente: clienteCtrl.text.trim(),
+                          tipo: tipo,
+                          color: colorCtrl.text.trim(),
+                          cantidad: cant,
+                          destino: destCtrl.text.trim(),
+                          precioUnit: precio,
+                          pago: pago,
+                          montoPagado: pago == ModalidadPago.contado
+                              ? cant * precio : 0,
+                          fecha: DateTime.now(),
+                        ));
                         Navigator.pop(ctx);
                       },
                       child: const Text('Registrar pedido',
@@ -505,10 +522,8 @@ class _TarjetaVenta extends StatelessWidget {
             emoji: '🟢',
             texto: '¡Casi! — falta Bs ${venta.pendiente.toStringAsFixed(0)}');
       case EstadoPago.saldado:
-        return (color: _kVerde,
-            barColor: _kVerde,
-            emoji: '✅',
-            texto: '¡Pagado completo!');
+        return (color: _kVerde, barColor: _kVerde,
+            emoji: '✅', texto: '¡Pagado completo!');
     }
   }
 
@@ -551,10 +566,10 @@ class _TarjetaVenta extends StatelessWidget {
           Container(
             height: 4,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
+              gradient: const LinearGradient(
                   colors: [_kAzul, _kAzulClaro, _kVerde, _kVerdeClaro]),
-              borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(17)),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(17)),
             ),
           ),
 
@@ -611,7 +626,8 @@ class _TarjetaVenta extends StatelessWidget {
                               Expanded(
                                 child: Text(venta.destino,
                                     style: TextStyle(
-                                        color: Colors.white.withValues(alpha: 0.45),
+                                        color: Colors.white
+                                            .withValues(alpha: 0.45),
                                         fontSize: 11),
                                     overflow: TextOverflow.ellipsis),
                               ),
@@ -641,6 +657,30 @@ class _TarjetaVenta extends StatelessWidget {
                                   fontSize: 9,
                                   fontWeight: FontWeight.w700)),
                         ),
+                        // Indicador de sincronización con cobranza
+                        if (venta.generaCobranza) ...[
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 5, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: _kVerde.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(5),
+                              border: Border.all(
+                                  color: _kVerde.withValues(alpha: 0.35)),
+                            ),
+                            child: const Row(children: [
+                              Icon(Icons.sync_rounded,
+                                  color: _kVerde, size: 8),
+                              SizedBox(width: 3),
+                              Text('Cobranza',
+                                  style: TextStyle(
+                                      color: _kVerde,
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.w700)),
+                            ]),
+                          ),
+                        ],
                       ],
                     ),
                   ],
@@ -694,7 +734,7 @@ class _TarjetaVenta extends StatelessWidget {
                   ),
                 ]),
 
-                if (!venta.saldado) ...[
+                if (!venta.saldado && venta.generaCobranza) ...[
                   const SizedBox(height: 10),
                   SizedBox(
                     width: double.infinity,
@@ -743,8 +783,7 @@ class _Caja extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: color.withValues(alpha: 0.45)),
             boxShadow: [
-              BoxShadow(color: color.withValues(alpha: 0.10),
-                  blurRadius: 12)
+              BoxShadow(color: color.withValues(alpha: 0.10), blurRadius: 12)
             ],
           ),
           child: Row(children: [
@@ -761,10 +800,13 @@ class _Caja extends StatelessWidget {
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(valor,
                   style: TextStyle(
-                      color: color, fontWeight: FontWeight.w900, fontSize: 16)),
+                      color: color,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 16)),
               Text(titulo,
                   style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.45), fontSize: 10)),
+                      color: Colors.white.withValues(alpha: 0.45),
+                      fontSize: 10)),
             ]),
           ]),
         ),
@@ -799,20 +841,30 @@ class _Input extends StatelessWidget {
             borderSide: const BorderSide(color: _kAzulClaro, width: 1.5),
           ),
           filled: true,
-          fillColor: Colors.white.withValues(alpha: 0.05),
-          contentPadding:
-              const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+          fillColor: Colors.white.withValues(alpha: 0.04),
         ),
       );
 }
 
+class _SecLabel extends StatelessWidget {
+  final String text;
+  const _SecLabel(this.text);
+  @override
+  Widget build(BuildContext context) => Text(text,
+      style: TextStyle(
+          color: Colors.white.withValues(alpha: 0.35),
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.3));
+}
+
 class _PagoBtn extends StatelessWidget {
   final String label;
-  final bool activo;
   final Color color;
+  final bool activo;
   final VoidCallback onTap;
-  const _PagoBtn({required this.label, required this.activo,
-      required this.color, required this.onTap});
+  const _PagoBtn({required this.label, required this.color,
+      required this.activo, required this.onTap});
 
   @override
   Widget build(BuildContext context) => Expanded(
@@ -820,53 +872,46 @@ class _PagoBtn extends StatelessWidget {
           onTap: onTap,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
-            padding: const EdgeInsets.symmetric(vertical: 10),
+            padding: const EdgeInsets.symmetric(vertical: 11),
             decoration: BoxDecoration(
               color: activo
                   ? color.withValues(alpha: 0.20)
                   : Colors.white.withValues(alpha: 0.05),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                  color: activo
-                      ? color
-                      : Colors.white.withValues(alpha: 0.12)),
+                color: activo
+                    ? color
+                    : Colors.white.withValues(alpha: 0.12),
+              ),
             ),
             child: Text(label,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                     color: activo ? color : Colors.white38,
-                    fontSize: 11, fontWeight: FontWeight.w700)),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700)),
           ),
         ),
       );
 }
 
 class _Fila extends StatelessWidget {
-  final String label, valor;
-  final Color color;
-  const _Fila(this.label, this.valor, this.color);
-
+  final String etiqueta, valor;
+  final Color colorValor;
+  const _Fila(this.etiqueta, this.valor, this.colorValor);
   @override
   Widget build(BuildContext context) => Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label,
+          Text(etiqueta,
               style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.55), fontSize: 12)),
+                  color: Colors.white.withValues(alpha: 0.55),
+                  fontSize: 12)),
           Text(valor,
               style: TextStyle(
-                  color: color, fontSize: 12, fontWeight: FontWeight.w700)),
+                  color: colorValor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700)),
         ],
       );
-}
-
-class _SecLabel extends StatelessWidget {
-  final String texto;
-  const _SecLabel(this.texto);
-
-  @override
-  Widget build(BuildContext context) => Text(texto,
-      style: const TextStyle(
-          color: Colors.white38, fontSize: 10,
-          fontWeight: FontWeight.w700, letterSpacing: 1.3));
 }
