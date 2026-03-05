@@ -1,5 +1,5 @@
 ﻿import 'package:flutter/material.dart';
-import 'screens/presentacion.dart';
+import 'inicio/presentacion.dart';
 import 'clientes/clientes_page.dart';
 import 'ventas/ventas_page.dart';
 import 'cobranza/cobranza.dart';
@@ -24,7 +24,7 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
         fontFamily: 'Roboto',
       ),
-      home: const SplashScreen(),
+      home: SplashScreen(),
       routes: {
         '/home':       (_) => const HomePage(),
         '/clientes':   (_) => const ClientesPage(),
@@ -87,13 +87,6 @@ const List<_Modulo> _modulos = [
     textura: 'assets/images/aguayo_azul.png',
   ),
   _Modulo(
-    titulo: 'Compras',
-    icono: Icons.local_shipping_rounded,
-    gradiente: [Color(0xFFEC4899), Color(0xFFF472B6)],
-    ruta: '/compras',
-    textura: 'assets/images/aguayo_rojo.png',
-  ),
-  _Modulo(
     titulo: 'Producción',
     icono: Icons.precision_manufacturing_rounded,
     gradiente: [Color(0xFF8B5CF6), Color(0xFFA78BFA)],
@@ -101,7 +94,7 @@ const List<_Modulo> _modulos = [
     textura: 'assets/images/aguayo_morado.png',
   ),
   _Modulo(
-    titulo: 'Pagos',
+    titulo: 'Salarios',
     icono: Icons.payments_rounded,
     gradiente: [Color(0xFF14B8A6), Color(0xFF2DD4BF)],
     ruta: '/pagos',
@@ -170,6 +163,15 @@ class _HomePageState extends State<HomePage>
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+
+    final gridModulos = _modulos
+        .where((m) => m.titulo != 'Urdido' && m.titulo != 'IA Matices')
+        .toList();
+
+    final crossAxisCount = size.width < 600 ? 3 : 4;
+
+    final urdido = _modulos.firstWhere((m) => m.titulo == 'Urdido');
+    final iaMatices = _modulos.firstWhere((m) => m.titulo == 'IA Matices');
 
     return Scaffold(
       body: Stack(
@@ -253,17 +255,44 @@ class _HomePageState extends State<HomePage>
                   sliver: SliverGrid(
                     delegate: SliverChildBuilderDelegate(
                       (context, index) =>
-                          _ModuloCard(modulo: _modulos[index]),
-                      childCount: _modulos.length,
+                          _ModuloCard(modulo: gridModulos[index]),
+                      childCount: gridModulos.length,
                     ),
                     gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 4,
+                        SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: crossAxisCount,
                       crossAxisSpacing: 10,
                       mainAxisSpacing: 10,
                       childAspectRatio: 1.30,
                     ),
                   ),
+                ),
+              ],
+            ),
+          ),
+
+          Positioned(
+            right: 12,
+            bottom: 16,
+            child: Column(
+              children: [
+                FloatingActionButton(
+                  heroTag: 'fab-urdido',
+                  mini: true,
+                  tooltip: urdido.titulo,
+                  onPressed: () => Navigator.pushNamed(context, urdido.ruta),
+                  backgroundColor: urdido.gradiente.first,
+                  child: Icon(urdido.icono, color: Colors.white),
+                ),
+                const SizedBox(height: 10),
+                FloatingActionButton(
+                  heroTag: 'fab-ia-matices',
+                  mini: true,
+                  tooltip: iaMatices.titulo,
+                  onPressed: () =>
+                      Navigator.pushNamed(context, iaMatices.ruta),
+                  backgroundColor: iaMatices.gradiente.first,
+                  child: Icon(iaMatices.icono, color: Colors.white),
                 ),
               ],
             ),
@@ -274,6 +303,8 @@ class _HomePageState extends State<HomePage>
   }
 
   Widget _buildHeader(BuildContext context) {
+    final salarios = _modulos.firstWhere((m) => m.titulo == 'Salarios');
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -359,6 +390,46 @@ class _HomePageState extends State<HomePage>
                   ],
                 ),
               ),
+              GestureDetector(
+                onTap: () => Navigator.pushNamed(context, '/compras'),
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.08),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.15),
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.local_shipping_rounded,
+                    color: Colors.white.withValues(alpha: 0.80),
+                    size: 20,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              GestureDetector(
+                onTap: () => Navigator.pushNamed(context, salarios.ruta),
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.08),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.15),
+                    ),
+                  ),
+                  child: Icon(
+                    salarios.icono,
+                    color: Colors.white.withValues(alpha: 0.80),
+                    size: 20,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
               // Campana de notificaciones
               Container(
                 width: 38,

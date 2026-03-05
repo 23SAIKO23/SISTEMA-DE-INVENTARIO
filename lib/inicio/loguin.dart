@@ -14,6 +14,11 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _loading = false;
   String? _error;
 
+  static const _kFieldText = Color(0xFF0F172A);
+  static const _kFieldHint = Color(0xFF475569);
+  static const _kFieldBorder = Color(0xFFCBD5E1);
+  static const _kFieldFocus = Color(0xFF6D28D9);
+
   @override
   void dispose() {
     _userController.dispose();
@@ -115,9 +120,32 @@ class _LoginScreenState extends State<LoginScreen> {
                                 TextField(
                                   controller: _userController,
                                   textInputAction: TextInputAction.next,
+                                  style: const TextStyle(
+                                    color: _kFieldText,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                   decoration: InputDecoration(
                                     labelText: 'Usuario',
-                                    prefixIcon: const Icon(Icons.person_outline),
+                                    labelStyle: const TextStyle(
+                                      color: _kFieldHint,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                    prefixIcon: const Icon(
+                                      Icons.person_outline,
+                                      color: _kFieldHint,
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                      borderSide:
+                                          const BorderSide(color: _kFieldBorder),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                      borderSide: const BorderSide(
+                                        color: _kFieldFocus,
+                                        width: 2,
+                                      ),
+                                    ),
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(14),
                                     ),
@@ -128,9 +156,20 @@ class _LoginScreenState extends State<LoginScreen> {
                                   controller: _passController,
                                   obscureText: _obscure,
                                   onSubmitted: (_) => _submit(),
+                                  style: const TextStyle(
+                                    color: _kFieldText,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                   decoration: InputDecoration(
                                     labelText: 'Contraseña',
-                                    prefixIcon: const Icon(Icons.lock_outline),
+                                    labelStyle: const TextStyle(
+                                      color: _kFieldHint,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                    prefixIcon: const Icon(
+                                      Icons.lock_outline,
+                                      color: _kFieldHint,
+                                    ),
                                     suffixIcon: IconButton(
                                       onPressed: () {
                                         setState(() => _obscure = !_obscure);
@@ -139,6 +178,19 @@ class _LoginScreenState extends State<LoginScreen> {
                                         _obscure
                                             ? Icons.visibility_outlined
                                             : Icons.visibility_off_outlined,
+                                        color: _kFieldHint,
+                                      ),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                      borderSide:
+                                          const BorderSide(color: _kFieldBorder),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                      borderSide: const BorderSide(
+                                        color: _kFieldFocus,
+                                        width: 2,
                                       ),
                                     ),
                                     border: OutlineInputBorder(

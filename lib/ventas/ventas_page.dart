@@ -24,6 +24,8 @@ class VentasPage extends StatefulWidget {
 class _VentasPageState extends State<VentasPage> {
   final _svc = AppService.instance;
 
+  static const double _kDesktopBreakpoint = 900;
+
   @override
   void initState() {
     super.initState();
@@ -162,13 +164,14 @@ class _VentasPageState extends State<VentasPage> {
                         child: Text('Sin pedidos',
                             style: TextStyle(
                                 color: Colors.white.withValues(alpha: 0.35))))
-                    : ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-                        itemCount: ventas.length,
-                        itemBuilder: (_, i) => _TarjetaVenta(
-                          venta: ventas[i],
-                          onAbonar: () => _abonar(context, ventas[i]),
-                        ),
+                    : LayoutBuilder(
+                        builder: (context, constraints) {
+                          final isDesktop =
+                              constraints.maxWidth >= _kDesktopBreakpoint;
+                          return isDesktop
+                              ? _buildDesktopTable(context, ventas)
+                              : _buildMobileList(context, ventas);
+                        },
                       ),
               ),
             ],
@@ -185,6 +188,215 @@ class _VentasPageState extends State<VentasPage> {
         onPressed: () => _formulario(context),
       ),
     );
+  }
+
+  Widget _buildMobileList(BuildContext context, List<Venta> ventas) {
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+      itemCount: ventas.length,
+      itemBuilder: (_, i) => _TarjetaVenta(
+        venta: ventas[i],
+        onAbonar: () => _abonar(context, ventas[i]),
+      ),
+    );
+  }
+
+  Widget _buildDesktopTable(BuildContext context, List<Venta> ventas) {
+    final headingStyle = TextStyle(
+      color: Colors.white.withValues(alpha: 0.85),
+      fontSize: 12,
+      fontWeight: FontWeight.w800,
+      letterSpacing: 0.4,
+    );
+    final cellStyle = TextStyle(
+      color: Colors.white.withValues(alpha: 0.82),
+      fontSize: 12,
+      fontWeight: FontWeight.w600,
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: _kAzulClaro.withValues(alpha: 0.25),
+            ),
+          ),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 1180),
+              child: SingleChildScrollView(
+                child: DataTable(
+                  headingRowHeight: 44,
+                  dataRowMinHeight: 48,
+                  dataRowMaxHeight: 56,
+                  columnSpacing: 18,
+                  headingRowColor: WidgetStateProperty.all(
+                    _kAzul.withValues(alpha: 0.22),
+                  ),
+                  dataRowColor: WidgetStateProperty.resolveWith((states) {
+                    if (states.contains(WidgetState.selected)) {
+                      return _kAzulClaro.withValues(alpha: 0.14);
+                    }
+                    return Colors.transparent;
+                  }),
+                  columns: [
+                    DataColumn(label: Text('#', style: headingStyle)),
+                    DataColumn(label: Text('Cliente', style: headingStyle)),
+                    DataColumn(label: Text('Tipo', style: headingStyle)),
+                    DataColumn(label: Text('Color', style: headingStyle)),
+                    DataColumn(label: Text('Cant.', style: headingStyle)),
+                    DataColumn(label: Text('Pago', style: headingStyle)),
+                    DataColumn(label: Text('Total', style: headingStyle)),
+                    DataColumn(label: Text('Cobrado', style: headingStyle)),
+                    DataColumn(label: Text('Pendiente', style: headingStyle)),
+                    DataColumn(label: Text('Estado', style: headingStyle)),
+                    DataColumn(label: Text('Acción', style: headingStyle)),
+                  ],
+                  rows: List<DataRow>.generate(ventas.length, (i) {
+                    final v = ventas[i];
+                    final estadoColor = _estadoColor(v.estadoPago);
+                    final canAbonar = !v.saldado && v.generaCobranza;
+
+                    return DataRow(
+                      onSelectChanged:
+                          canAbonar ? (_) => _abonar(context, v) : null,
+                      cells: [
+                        DataCell(Text(v.id, style: cellStyle)),
+                        DataCell(Text(v.cliente, style: cellStyle)),
+                        DataCell(Text(_labelTipo(v.tipo), style: cellStyle)),
+                        DataCell(Text(v.color.isEmpty ? '—' : v.color,
+                            style: cellStyle)),
+                        DataCell(Text(
+                          v.tipo == TipoProducto.metros
+                              ? '${v.cantidad.toStringAsFixed(0)} m'
+                              : '${v.cantidad.toInt()} unid.',
+                          style: cellStyle,
+                        )),
+                        DataCell(
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: _kAzul.withValues(alpha: 0.28),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: _kAzulClaro.withValues(alpha: 0.40),
+                              ),
+                            ),
+                            child: Text(
+                              _labelPago(v.pago),
+                              style: TextStyle(
+                                color: _kAzulClaro.withValues(alpha: 0.95),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ),
+                        DataCell(Text('Bs ${v.total.toStringAsFixed(0)}',
+                            style: cellStyle)),
+                        DataCell(Text('Bs ${v.montoPagado.toStringAsFixed(0)}',
+                            style: TextStyle(
+                              color: _kVerdeClaro.withValues(alpha: 0.95),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                            ))),
+                        DataCell(Text('Bs ${v.pendiente.toStringAsFixed(0)}',
+                            style: TextStyle(
+                              color: v.pendiente > 0
+                                  ? const Color(0xFFFBBF24)
+                                  : Colors.white.withValues(alpha: 0.75),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                            ))),
+                        DataCell(
+                          Row(
+                            children: [
+                              Container(
+                                width: 10,
+                                height: 10,
+                                decoration: BoxDecoration(
+                                  color: estadoColor,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color:
+                                          estadoColor.withValues(alpha: 0.60),
+                                      blurRadius: 8,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(_labelEstado(v.estadoPago),
+                                  style: cellStyle),
+                            ],
+                          ),
+                        ),
+                        DataCell(
+                          canAbonar
+                              ? IconButton(
+                                  tooltip: 'Registrar abono',
+                                  onPressed: () => _abonar(context, v),
+                                  icon: const Icon(Icons.add_card_rounded,
+                                      color: _kVerdeClaro, size: 18),
+                                )
+                              : const Icon(Icons.check_circle_rounded,
+                                  color: _kVerde, size: 18),
+                        ),
+                      ],
+                    );
+                  }),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _labelPago(ModalidadPago p) {
+    switch (p) {
+      case ModalidadPago.contado:
+        return 'Contado';
+      case ModalidadPago.credito:
+        return 'Crédito';
+      case ModalidadPago.parcial:
+        return 'Parcial';
+    }
+  }
+
+  Color _estadoColor(EstadoPago e) {
+    switch (e) {
+      case EstadoPago.sinAbono:
+        return const Color(0xFFEF5350);
+      case EstadoPago.vaPagando:
+        return _kAzulClaro;
+      case EstadoPago.casiSaldado:
+        return _kVerdeClaro;
+      case EstadoPago.saldado:
+        return _kVerde;
+    }
+  }
+
+  String _labelEstado(EstadoPago e) {
+    switch (e) {
+      case EstadoPago.sinAbono:
+        return 'Sin abono';
+      case EstadoPago.vaPagando:
+        return 'Va pagando';
+      case EstadoPago.casiSaldado:
+        return 'Casi';
+      case EstadoPago.saldado:
+        return 'Saldado';
+    }
   }
 
   // ── Registrar abono (via AppService) ─────────
