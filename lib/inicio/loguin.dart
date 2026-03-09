@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -33,23 +34,31 @@ class _LoginScreenState extends State<LoginScreen> {
       _error = null;
     });
 
-    await Future<void>.delayed(const Duration(milliseconds: 250));
+    try {
+      final email = _userController.text.trim();
+      final pass = _passController.text;
 
-    final user = _userController.text.trim();
-    final pass = _passController.text;
+      final res = await Supabase.instance.client.auth.signInWithPassword(
+        email: email,
+        password: pass,
+      );
 
-    final ok = user == 'Jose' && pass == '123';
-    if (!mounted) return;
+      if (res.user == null) {
+        throw Exception('No se pudo iniciar sesión.');
+      }
 
-    if (!ok) {
-      setState(() {
-        _loading = false;
-        _error = 'Usuario o contraseña incorrectos.';
-      });
-      return;
+      if (!mounted) return;
+      Navigator.of(context).pushReplacementNamed('/home');
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.message);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    } finally {
+      if (!mounted) return;
+      setState(() => _loading = false);
     }
-
-    Navigator.of(context).pushReplacementNamed('/home');
   }
 
   @override

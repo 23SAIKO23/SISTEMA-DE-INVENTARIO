@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'loguin.dart';
 
@@ -15,6 +16,19 @@ class _SplashScreenState extends State<SplashScreen> {
     super.initState();
     Future<void>.delayed(const Duration(milliseconds: 1400), () {
       if (!mounted) return;
+
+      bool hasSession = false;
+      try {
+        hasSession = Supabase.instance.client.auth.currentSession != null;
+      } catch (_) {
+        hasSession = false;
+      }
+
+      if (hasSession) {
+        Navigator.of(context).pushReplacementNamed('/home');
+        return;
+      }
+
       Navigator.of(context).pushReplacement(
         PageRouteBuilder<void>(
           pageBuilder: (context, animation, secondaryAnimation) =>

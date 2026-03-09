@@ -1,11 +1,32 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'inicio/presentacion.dart';
 import 'clientes/clientes_page.dart';
 import 'ventas/ventas_page.dart';
 import 'cobranza/cobranza.dart';
 import 'produccion/produccion.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  const supabaseUrlEnv = String.fromEnvironment('SUPABASE_URL');
+  const supabaseAnonKeyEnv = String.fromEnvironment('SUPABASE_ANON_KEY');
+
+  const supabaseUrlDefault = 'https://hyxxrkvajyjxhvzmyxzb.supabase.co';
+  const supabaseAnonKeyDefault =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh5eHhya3ZhanlqeGh2em15eHpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwNzk4NjEsImV4cCI6MjA4ODY1NTg2MX0.2dSnLJ6tjbsQXHZ5ntbLmxT4buk1Favt10Vam5b5nos';
+
+  final supabaseUrl =
+      supabaseUrlEnv.isNotEmpty ? supabaseUrlEnv : supabaseUrlDefault;
+  final supabaseAnonKey = supabaseAnonKeyEnv.isNotEmpty
+      ? supabaseAnonKeyEnv
+      : supabaseAnonKeyDefault;
+
+  await Supabase.initialize(
+    url: supabaseUrl,
+    anonKey: supabaseAnonKey,
+  );
+
   runApp(const MyApp());
 }
 
