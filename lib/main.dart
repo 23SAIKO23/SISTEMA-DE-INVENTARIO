@@ -5,9 +5,16 @@ import 'clientes/clientes_page.dart';
 import 'ventas/ventas_page.dart';
 import 'cobranza/cobranza.dart';
 import 'produccion/produccion.dart';
+import 'Salarios/pagos.dart';
+import 'compra/compras_page.dart';
+
+import 'package:intl/date_symbol_data_local.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Inicialización de Idioma para fechas
+  await initializeDateFormatting('es', null);
 
   const supabaseUrlEnv = String.fromEnvironment('SUPABASE_URL');
   const supabaseAnonKeyEnv = String.fromEnvironment('SUPABASE_ANON_KEY');
@@ -53,6 +60,8 @@ class MyApp extends StatelessWidget {
         '/ventas':      (_) => const VentasPage(),
         '/cobranzas':   (_) => const CobranzaHubPage(),
         '/produccion':  (_) => const ProduccionHubPage(),
+        '/pagos':       (_) => const PagosPage(),
+        '/compras':     (_) => const ComprasPage(),
       },
     );
   }
