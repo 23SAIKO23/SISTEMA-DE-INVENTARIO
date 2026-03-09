@@ -3,6 +3,7 @@ import 'inicio/presentacion.dart';
 import 'clientes/clientes_page.dart';
 import 'ventas/ventas_page.dart';
 import 'cobranza/cobranza.dart';
+import 'produccion/produccion.dart';
 
 void main() {
   runApp(const MyApp());
@@ -26,10 +27,11 @@ class MyApp extends StatelessWidget {
       ),
       home: SplashScreen(),
       routes: {
-        '/home':       (_) => const HomePage(),
-        '/clientes':   (_) => const ClientesPage(),
-        '/ventas':     (_) => const VentasPage(),
-        '/cobranzas':  (_) => const CobranzaHubPage(),
+        '/home':        (_) => const HomePage(),
+        '/clientes':    (_) => const ClientesPage(),
+        '/ventas':      (_) => const VentasPage(),
+        '/cobranzas':   (_) => const CobranzaHubPage(),
+        '/produccion':  (_) => const ProduccionHubPage(),
       },
     );
   }
