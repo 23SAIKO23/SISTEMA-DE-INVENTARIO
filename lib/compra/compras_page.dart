@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
 import 'modelos_compra.dart';
 
 const _kAzulOscuro = Color(0xFF0D1424);
@@ -593,6 +595,7 @@ class _ModalCuentaCorrienteState extends State<_ModalCuentaCorriente> {
       columns: const [
         DataColumn(label: Text('Fecha', style: TextStyle(color: _kTextoSecundario, fontWeight: FontWeight.bold, fontSize: 12))),
         DataColumn(label: Text('Detalle', style: TextStyle(color: _kTextoSecundario, fontWeight: FontWeight.bold, fontSize: 12))),
+        DataColumn(label: Text('Recibo', style: TextStyle(color: _kTextoSecundario, fontWeight: FontWeight.bold, fontSize: 12))),
         DataColumn(label: Text('Costo (Bs)', style: TextStyle(color: _kTextoSecundario, fontWeight: FontWeight.bold, fontSize: 12))),
         DataColumn(label: Text('Abonado (Bs)', style: TextStyle(color: _kTextoSecundario, fontWeight: FontWeight.bold, fontSize: 12))),
         DataColumn(label: Text('Falta (Bs)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12))),
@@ -601,12 +604,33 @@ class _ModalCuentaCorrienteState extends State<_ModalCuentaCorriente> {
         final TransaccionCompra tx = fila['tx'];
         final double saldoLinea = fila['saldoLinea'];
         final bool esEntrada = fila['esEntrada'];
+        final tieneFoto = tx.comprobantePath != null && tx.comprobantePath!.isNotEmpty;
 
         return DataRow(
           cells: [
             DataCell(Text(DateFormat('dd/MM/yy').format(tx.fecha), style: const TextStyle(color: Colors.white, fontSize: 12))),
-            DataCell(Text(esEntrada ? '${tx.detalleMateriaPrima}' : 'Pago/Abono', 
-                style: const TextStyle(color: Colors.white, fontSize: 12))),
+            DataCell(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(esEntrada ? '${tx.detalleMateriaPrima}' : 'Pago/Abono', 
+                    style: const TextStyle(color: Colors.white, fontSize: 12)),
+                  if (tx.detalleExtra != null && tx.detalleExtra!.isNotEmpty)
+                    Text(tx.detalleExtra!, 
+                      style: const TextStyle(color: _kTextoSecundario, fontSize: 10, fontStyle: FontStyle.italic)),
+                ],
+              )
+            ),
+            DataCell(
+              tieneFoto 
+                ? IconButton(
+                    icon: const Icon(Icons.receipt_long_rounded, color: Colors.blueAccent, size: 20),
+                    onPressed: () => _verComprobanteCompleto(context, tx.comprobantePath!),
+                    tooltip: 'Ver Recibo Adjunto',
+                  )
+                : const SizedBox.shrink()
+            ),
             DataCell(Text(esEntrada ? _formatoMoneda.format(tx.importeCobrado) : '', 
                 style: const TextStyle(color: _kRojoDeuda, fontWeight: FontWeight.bold, fontSize: 12))),
             DataCell(Text(!esEntrada ? _formatoMoneda.format(tx.montoPagado) : '', 
@@ -623,93 +647,228 @@ class _ModalCuentaCorrienteState extends State<_ModalCuentaCorriente> {
     final bolsasCtrl = TextEditingController();
     final kilosXBolCtrl = TextEditingController();
     final montoCtrl = TextEditingController();
+    final obsCtrl = TextEditingController();
 
     showModalBottomSheet(
       context: ctx,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: _kCardBg.withValues(alpha: 0.95),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      builder: (_) => StatefulBuilder(
+        builder: (context, setStateModal) {
+          String? fotoRuta;
+          DateTime fechaSeleccionada = DateTime.now();
+
+          Future<void> _seleccionarFecha() async {
+            final DateTime? seleccion = await showDatePicker(
+              context: context,
+              initialDate: fechaSeleccionada,
+              firstDate: DateTime(2020),
+              lastDate: DateTime.now(),
+              builder: (context, child) {
+                return Theme(
+                  data: Theme.of(context).copyWith(
+                    colorScheme: const ColorScheme.dark(
+                      primary: _kNaranjaAcento,
+                      onPrimary: Colors.white,
+                      surface: _kCardBg,
+                      onSurface: Colors.white,
+                    ),
+                  ),
+                  child: child!,
+                );
+              },
+            );
+            if (seleccion != null && seleccion != fechaSeleccionada) {
+              setStateModal(() => fechaSeleccionada = seleccion);
+            }
+          }
+
+          return Padding(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: _kCardBg.withValues(alpha: 0.95),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+              ),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const Text('Recibir Material', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 24),
+                
+                // --- Selector de Fecha ---
+                GestureDetector(
+                  onTap: _seleccionarFecha,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.calendar_today_rounded, color: _kTextoSecundario, size: 20),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Fecha: ${DateFormat('dd/MM/yyyy').format(fechaSeleccionada)}',
+                          style: const TextStyle(color: Colors.white, fontSize: 14),
+                        ),
+                        const Spacer(),
+                        const Icon(Icons.edit_calendar_rounded, color: _kNaranjaAcento, size: 20),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                
+                _CampoG(ctrl: bolsasCtrl, hint: 'Nº Bolsas (ej: 38)', ico: Icons.shopping_bag_rounded, num: true),
+                const SizedBox(height: 12),
+                _CampoG(ctrl: kilosXBolCtrl, hint: 'Kg por Bolsa (ej: 6)', ico: Icons.scale_rounded, num: true),
+                const SizedBox(height: 12),
+                _CampoG(ctrl: montoCtrl, hint: 'Importe Cobrado (Bs.)', ico: Icons.money_rounded, num: true),
+                const SizedBox(height: 12),
+                _CampoG(ctrl: obsCtrl, hint: 'Observaciones (opcional)', ico: Icons.notes_rounded, num: false),
+                const SizedBox(height: 16),
+                _BotonAdjuntarFoto(
+                  rutaActual: fotoRuta,
+                  onRutaCambiada: (ruta) => setStateModal(() => fotoRuta = ruta),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(width: double.infinity, child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: _kNaranjaAcento, padding: const EdgeInsets.symmetric(vertical: 16)),
+                  onPressed: () {
+                    final bolsas = double.tryParse(bolsasCtrl.text) ?? 0;
+                    final kilos = double.tryParse(kilosXBolCtrl.text) ?? 0;
+                    final monto = double.tryParse(montoCtrl.text) ?? 0;
+                    if (bolsas > 0 && monto > 0) {
+                      _srv.registrarEntregaMaterial(
+                        widget.proveedor, 
+                        '${bolsas.toInt()} bolsas a ${kilos.toInt()}kg', 
+                        bolsas * kilos, 
+                        monto,
+                        comprobantePath: fotoRuta,
+                        fechaRegistro: fechaSeleccionada,
+                        detalleExtra: obsCtrl.text.trim().isNotEmpty ? obsCtrl.text.trim() : null,
+                      );
+                      Navigator.pop(ctx);
+                    }
+                  },
+                  child: const Text('Registrar Deuda', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                ))
+              ]),
             ),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              const Text('Recibir Material', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 24),
-              _CampoG(ctrl: bolsasCtrl, hint: 'Nº Bolsas (ej: 38)', ico: Icons.shopping_bag_rounded, num: true),
-              const SizedBox(height: 12),
-              _CampoG(ctrl: kilosXBolCtrl, hint: 'Kg por Bolsa (ej: 6)', ico: Icons.scale_rounded, num: true),
-              const SizedBox(height: 12),
-              _CampoG(ctrl: montoCtrl, hint: 'Importe Cobrado (Bs.)', ico: Icons.money_rounded, num: true),
-              const SizedBox(height: 24),
-              SizedBox(width: double.infinity, child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: _kNaranjaAcento, padding: const EdgeInsets.symmetric(vertical: 16)),
-                onPressed: () {
-                  final bolsas = double.tryParse(bolsasCtrl.text) ?? 0;
-                  final kilos = double.tryParse(kilosXBolCtrl.text) ?? 0;
-                  final monto = double.tryParse(montoCtrl.text) ?? 0;
-                  if (bolsas > 0 && monto > 0) {
-                    _srv.registrarEntregaMaterial(
-                      widget.proveedor, 
-                      '${bolsas.toInt()} bolsas a ${kilos.toInt()}kg', 
-                      bolsas * kilos, 
-                      monto
-                    );
-                    Navigator.pop(ctx);
-                  }
-                },
-                child: const Text('Registrar Deuda', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-              ))
-            ]),
-          ),
-        ),
+          );
+        }
       ),
     );
   }
 
   void _abrirDialInsertarEfectivo(BuildContext ctx) {
     final montoCtrl = TextEditingController();
+    final obsCtrl = TextEditingController();
 
     showModalBottomSheet(
       context: ctx,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: _kCardBg.withValues(alpha: 0.95),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      builder: (_) => StatefulBuilder(
+        builder: (context, setStateModal) {
+          String? fotoRuta;
+          DateTime fechaSeleccionada = DateTime.now();
+
+          Future<void> _seleccionarFecha() async {
+            final DateTime? seleccion = await showDatePicker(
+              context: context,
+              initialDate: fechaSeleccionada,
+              firstDate: DateTime(2020),
+              lastDate: DateTime.now(),
+              builder: (context, child) {
+                return Theme(
+                  data: Theme.of(context).copyWith(
+                    colorScheme: const ColorScheme.dark(
+                      primary: _kVerdePago,
+                      onPrimary: Colors.white,
+                      surface: _kCardBg,
+                      onSurface: Colors.white,
+                    ),
+                  ),
+                  child: child!,
+                );
+              },
+            );
+            if (seleccion != null && seleccion != fechaSeleccionada) {
+              setStateModal(() => fechaSeleccionada = seleccion);
+            }
+          }
+
+          return Padding(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: _kCardBg.withValues(alpha: 0.95),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+              ),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const Text('Abonar Dinero', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 24),
+
+                // --- Selector de Fecha ---
+                GestureDetector(
+                  onTap: _seleccionarFecha,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.calendar_today_rounded, color: _kTextoSecundario, size: 20),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Fecha: ${DateFormat('dd/MM/yyyy').format(fechaSeleccionada)}',
+                          style: const TextStyle(color: Colors.white, fontSize: 14),
+                        ),
+                        const Spacer(),
+                        const Icon(Icons.edit_calendar_rounded, color: _kVerdePago, size: 20),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                _CampoG(ctrl: montoCtrl, hint: 'Monto a pagar (Bs.)', ico: Icons.payments_rounded, num: true),
+                const SizedBox(height: 12),
+                _CampoG(ctrl: obsCtrl, hint: 'Observaciones (opcional)', ico: Icons.notes_rounded, num: false),
+                const SizedBox(height: 16),
+                _BotonAdjuntarFoto(
+                  rutaActual: fotoRuta,
+                  onRutaCambiada: (ruta) => setStateModal(() => fotoRuta = ruta),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(width: double.infinity, child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: _kVerdePago, padding: const EdgeInsets.symmetric(vertical: 16)),
+                  onPressed: () {
+                    final monto = double.tryParse(montoCtrl.text) ?? 0;
+                    if (monto > 0) {
+                      _srv.registrarPagoEfectivo(
+                        widget.proveedor, 
+                        monto, 
+                        comprobantePath: fotoRuta,
+                        fechaRegistro: fechaSeleccionada,
+                        detalleExtra: obsCtrl.text.trim().isNotEmpty ? obsCtrl.text.trim() : null,
+                      );
+                      Navigator.pop(ctx);
+                    }
+                  },
+                  child: const Text('Registrar Abono', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                ))
+              ]),
             ),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              const Text('Abonar Dinero', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 24),
-              _CampoG(ctrl: montoCtrl, hint: 'Monto a pagar (Bs.)', ico: Icons.payments_rounded, num: true),
-              const SizedBox(height: 24),
-              SizedBox(width: double.infinity, child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: _kVerdePago, padding: const EdgeInsets.symmetric(vertical: 16)),
-                onPressed: () {
-                  final monto = double.tryParse(montoCtrl.text) ?? 0;
-                  if (monto > 0) {
-                    _srv.registrarPagoEfectivo(widget.proveedor, monto);
-                    Navigator.pop(ctx);
-                  }
-                },
-                child: const Text('Registrar Abono', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-              ))
-            ]),
-          ),
-        ),
+          );
+        }
       ),
     );
   }
@@ -736,6 +895,98 @@ class _CampoG extends StatelessWidget {
         fillColor: Colors.white.withValues(alpha: 0.05),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
       ),
+    );
+  }
+}
+
+// Ventana flotante interactiva para ver el comprobante de pago completo
+void _verComprobanteCompleto(BuildContext context, String path) {
+  showDialog(
+    context: context,
+    builder: (_) => Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(10),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Stack(
+          alignment: Alignment.topRight,
+          children: [
+            Image.file(File(path), fit: BoxFit.contain),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: IconButton(
+                icon: const Icon(Icons.cancel, color: Colors.white, size: 36),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _BotonAdjuntarFoto extends StatelessWidget {
+  final String? rutaActual;
+  final Function(String?) onRutaCambiada;
+
+  const _BotonAdjuntarFoto({this.rutaActual, required this.onRutaCambiada});
+
+  @override
+  Widget build(BuildContext context) {
+    if (rutaActual != null && rutaActual!.isNotEmpty) {
+      return Container(
+        height: 80,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _kNaranjaAcento.withValues(alpha: 0.5)),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(width: 8),
+            ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.file(File(rutaActual!), width: 60, height: 60, fit: BoxFit.cover)),
+            const SizedBox(width: 12),
+            const Expanded(child: Text('Foto adjuntada', style: TextStyle(color: Colors.white, fontSize: 13))),
+            IconButton(icon: const Icon(Icons.delete_outline_rounded, color: _kRojoDeuda), onPressed: () => onRutaCambiada(null)),
+          ],
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.camera_alt_rounded, size: 18),
+            label: const Text('Cámara'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.white,
+              side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+            onPressed: () async {
+              final img = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 70);
+              if (img != null) onRutaCambiada(img.path);
+            },
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.photo_library_rounded, size: 18),
+            label: const Text('Galería'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.white,
+              side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+            onPressed: () async {
+              final img = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 70);
+              if (img != null) onRutaCambiada(img.path);
+            },
+          ),
+        ),
+      ],
     );
   }
 }

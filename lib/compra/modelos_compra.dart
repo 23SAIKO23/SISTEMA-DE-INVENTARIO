@@ -13,6 +13,12 @@ class TransaccionCompra {
   // Solo aplica para pagoEfectivo
   final double? montoPagado;
   
+  // Notas adicionales del usuario (Ej: "Acuenta de la próxima semana")
+  final String? detalleExtra;
+  
+  // Ruta de la foto adjunta del comprobante de transferencia o recibo (opcional)
+  final String? comprobantePath;
+
   // Saldo resultante después de aplicar esta transacción
   double saldoDespuesTransaccion;
 
@@ -24,6 +30,8 @@ class TransaccionCompra {
     this.kilos,
     this.importeCobrado,
     this.montoPagado,
+    this.detalleExtra,
+    this.comprobantePath,
     this.saldoDespuesTransaccion = 0.0,
   });
 }
@@ -94,28 +102,32 @@ class ComprasService extends ChangeNotifier {
     notifyListeners();
   }
 
-  void registrarEntregaMaterial(Proveedor proveedor, String detalle, double kilos, double importeCobrado) {
+  void registrarEntregaMaterial(Proveedor proveedor, String detalle, double kilos, double importeCobrado, {String? comprobantePath, DateTime? fechaRegistro, String? detalleExtra}) {
     double saldoPrevio = proveedor.saldoDeudorActual;
     final tx = TransaccionCompra(
       id: 'TX${DateTime.now().millisecondsSinceEpoch}',
-      fecha: DateTime.now(),
+      fecha: fechaRegistro ?? DateTime.now(),
       tipo: TipoTransaccion.entregaMaterial,
       detalleMateriaPrima: detalle,
       kilos: kilos,
       importeCobrado: importeCobrado,
+      comprobantePath: comprobantePath,
+      detalleExtra: detalleExtra,
     );
     tx.saldoDespuesTransaccion = saldoPrevio + importeCobrado;
     proveedor.historial.insert(0, tx); // Al principio para ver el más reciente arriba
     notifyListeners();
   }
 
-  void registrarPagoEfectivo(Proveedor proveedor, double montoPagado) {
+  void registrarPagoEfectivo(Proveedor proveedor, double montoPagado, {String? comprobantePath, DateTime? fechaRegistro, String? detalleExtra}) {
     double saldoPrevio = proveedor.saldoDeudorActual;
     final tx = TransaccionCompra(
       id: 'TX${DateTime.now().millisecondsSinceEpoch}',
-      fecha: DateTime.now(),
+      fecha: fechaRegistro ?? DateTime.now(),
       tipo: TipoTransaccion.pagoEfectivo,
       montoPagado: montoPagado,
+      comprobantePath: comprobantePath,
+      detalleExtra: detalleExtra,
     );
     tx.saldoDespuesTransaccion = saldoPrevio - montoPagado;
     proveedor.historial.insert(0, tx);
