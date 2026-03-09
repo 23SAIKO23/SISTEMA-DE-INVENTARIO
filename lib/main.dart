@@ -1,6 +1,7 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'inicio/presentacion.dart';
+import 'inicio/loguin.dart';
 import 'clientes/clientes_page.dart';
 import 'ventas/ventas_page.dart';
 import 'cobranza/cobranza.dart';
@@ -32,9 +33,39 @@ Future<void> main() async {
   await Supabase.initialize(
     url: supabaseUrl,
     anonKey: supabaseAnonKey,
+    authOptions: FlutterAuthClientOptions(
+      localStorage: _InMemoryLocalStorage(),
+    ),
   );
 
   runApp(const MyApp());
+}
+
+class _InMemoryLocalStorage extends LocalStorage {
+  final Map<String, String> _store = {};
+
+  @override
+  Future<void> initialize() async {}
+
+  @override
+  Future<bool> hasAccessToken() async {
+    return _store.containsKey('accessToken') || _store.containsKey('persistSession');
+  }
+
+  @override
+  Future<String?> accessToken() async => _store['accessToken'];
+
+  @override
+  Future<void> removePersistedSession() async {
+    _store.remove('persistSession');
+    _store.remove('accessToken');
+    _store.remove('refreshToken');
+  }
+
+  @override
+  Future<void> persistSession(String persistSession) async {
+    _store['persistSession'] = persistSession;
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -55,6 +86,7 @@ class MyApp extends StatelessWidget {
       ),
       home: SplashScreen(),
       routes: {
+        '/login':       (_) => const LoginScreen(),
         '/home':        (_) => const HomePage(),
         '/clientes':    (_) => const ClientesPage(),
         '/ventas':      (_) => const VentasPage(),
@@ -491,6 +523,34 @@ class _HomePageState extends State<HomePage>
                       ),
                     ),
                   ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              GestureDetector(
+                onTap: () async {
+                  await Supabase.instance.client.auth.signOut();
+                  if (!context.mounted) return;
+                  Navigator.pushNamedAndRemoveUntil(
+                    context,
+                    '/login',
+                    (route) => false,
+                  );
+                },
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.08),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.15),
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.logout_rounded,
+                    color: Colors.white.withValues(alpha: 0.80),
+                    size: 20,
+                  ),
                 ),
               ),
             ],
