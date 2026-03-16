@@ -22,7 +22,6 @@ class _ClientesPageState extends State<ClientesPage>
   final TextEditingController _searchCtrl = TextEditingController();
   String _busqueda = '';
 
-  static const double _kDesktopBreakpoint = 900;
 
   // Datos de ejemplo
   final List<Cliente> _clientes = [
@@ -134,289 +133,282 @@ class _ClientesPageState extends State<ClientesPage>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0D0018),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: ShaderMask(
-          shaderCallback: (b) => const LinearGradient(
-            colors: [Color(0xFFE0C3FC), Color(0xFFFFB6C1)],
-          ).createShader(b),
-          child: const Text(
-            'Clientes',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-            ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF0D0018), Color(0xFF1A0035)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
           ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.bar_chart_rounded, color: Color(0xFF818CF8)),
-            tooltip: 'Semáforo de pago',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (_) => SemaforoPagoPage(clientes: _clientes)),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.account_balance_wallet_rounded,
-                color: Color(0xFFFBBF24)),
-            tooltip: 'Control de deudas',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (_) => ControlDeudasPage(clientes: _clientes)),
-            ),
-          ),
-        ],
-        bottom: TabBar(
-          controller: _tabCtrl,
-          indicatorColor: const Color(0xFF7C3AED),
-          indicatorWeight: 3,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white38,
-          labelStyle:
-              const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-          tabs: const [
-            Tab(text: 'Todos'),
-            Tab(icon: Icon(Icons.storefront_rounded, size: 18)),
-            Tab(icon: Icon(Icons.home_rounded, size: 18)),
-            Tab(icon: Icon(Icons.apartment_rounded, size: 18)),
-          ],
-        ),
-      ),
-      body: Column(
-        children: [
-          // ── Buscador ─────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: Container(
-              height: 44,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.07),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                    color: const Color(0xFF7C3AED).withValues(alpha: 0.30)),
-              ),
-              child: TextField(
-                controller: _searchCtrl,
-                style: const TextStyle(color: Colors.white, fontSize: 13),
-                onChanged: (v) => setState(() => _busqueda = v),
-                decoration: InputDecoration(
-                  border: InputBorder.none,
-                  prefixIcon: Icon(Icons.search_rounded,
-                      color: const Color(0xFF7C3AED).withValues(alpha: 0.70),
-                      size: 19),
-                  hintText: 'Buscar cliente...',
-                  hintStyle: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.30),
-                      fontSize: 13),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+        child: SafeArea(
+          child: Column(
+            children: [
+              _buildModernHeader(context),
+              _buildCategoryTabs(),
+              _buildSearchBar(),
+              
+              // ── Tabla / Lista ────────────────────
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: _filtrados.isEmpty
+                      ? _buildEmptyState()
+                      : _buildPremiumTable(context, _filtrados),
                 ),
               ),
-            ),
+            ],
           ),
-
-          // ── Lista ────────────────────────────
-          Expanded(
-            child: _filtrados.isEmpty
-                ? Center(
-                    child: Text('Sin clientes',
-                        style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.30))))
-                : LayoutBuilder(
-                    builder: (context, constraints) {
-                      final isDesktop =
-                          constraints.maxWidth >= _kDesktopBreakpoint;
-                      return isDesktop
-                          ? _buildDesktopTable(context, _filtrados)
-                          : _buildMobileList(context, _filtrados);
-                    },
-                  ),
-          ),
-        ],
+        ),
       ),
 
       // ── FAB: Nuevo cliente ──────────────────
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: const Color(0xFF7C3AED),
+        foregroundColor: Colors.white,
+        elevation: 8,
         icon: const Icon(Icons.person_add_rounded),
-        label: const Text('Nuevo cliente',
-            style: TextStyle(fontWeight: FontWeight.w700)),
+        label: const Text('Registrar Nuevo',
+            style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: 0.5)),
         onPressed: () => _mostrarFormulario(context),
       ),
     );
   }
 
-  Widget _buildMobileList(BuildContext context, List<Cliente> clientes) {
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
-      itemCount: clientes.length,
-      itemBuilder: (_, i) => _ClienteCard(
-        cliente: clientes[i],
-        colorTipo: _colorTipo(clientes[i].tipo),
-        iconTipo: _iconTipo(clientes[i].tipo),
-        labelTipo: _labelTipo(clientes[i].tipo),
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => HistorialComprasPage(cliente: clientes[i]),
+  Widget _buildModernHeader(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+              onPressed: () => Navigator.pop(context),
+            ),
           ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ShaderMask(
+                  shaderCallback: (b) => const LinearGradient(
+                    colors: [Color(0xFFE0C3FC), Color(0xFFFFB6C1)],
+                  ).createShader(b),
+                  child: const Text(
+                    'Gestión de Clientes',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                ),
+                Text('Base de datos y control de saldos',
+                    style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 12, fontWeight: FontWeight.w500)),
+              ],
+            ),
+          ),
+          _buildActionIcon(Icons.bar_chart_rounded, const Color(0xFF818CF8), 'Semáforo', 
+            () => Navigator.push(context, MaterialPageRoute(builder: (_) => SemaforoPagoPage(clientes: _clientes)))),
+          const SizedBox(width: 8),
+          _buildActionIcon(Icons.account_balance_wallet_rounded, const Color(0xFFFBBF24), 'Deudas',
+            () => Navigator.push(context, MaterialPageRoute(builder: (_) => ControlDeudasPage(clientes: _clientes)))),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionIcon(IconData icon, Color color, String tip, VoidCallback onTap) {
+    return Tooltip(
+      message: tip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color.withValues(alpha: 0.2)),
+          ),
+          child: Icon(icon, color: color, size: 20),
         ),
       ),
     );
   }
 
-  Widget _buildDesktopTable(BuildContext context, List<Cliente> clientes) {
-    final headingStyle = TextStyle(
-      color: Colors.white.withValues(alpha: 0.85),
-      fontSize: 12,
-      fontWeight: FontWeight.w800,
-      letterSpacing: 0.4,
-    );
-    final cellStyle = TextStyle(
-      color: Colors.white.withValues(alpha: 0.82),
-      fontSize: 12,
-      fontWeight: FontWeight.w600,
-    );
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.05),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: const Color(0xFF7C3AED).withValues(alpha: 0.25),
-            ),
-          ),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: 980),
-              child: SingleChildScrollView(
-                child: DataTable(
-                  headingRowHeight: 44,
-                  dataRowMinHeight: 48,
-                  dataRowMaxHeight: 52,
-                  columnSpacing: 20,
-                  headingRowColor: WidgetStateProperty.all(
-                    const Color(0xFF1A0035).withValues(alpha: 0.70),
-                  ),
-                  dataRowColor: WidgetStateProperty.resolveWith((states) {
-                    if (states.contains(WidgetState.selected)) {
-                      return const Color(0xFF7C3AED).withValues(alpha: 0.18);
-                    }
-                    return Colors.transparent;
-                  }),
-                  columns: [
-                    DataColumn(label: Text('Nombre', style: headingStyle)),
-                    DataColumn(label: Text('Teléfono', style: headingStyle)),
-                    DataColumn(label: Text('Tipo', style: headingStyle)),
-                    DataColumn(label: Text('Deuda', style: headingStyle)),
-                    DataColumn(label: Text('Estado', style: headingStyle)),
-                    DataColumn(label: Text('Acción', style: headingStyle)),
-                  ],
-                  rows: List<DataRow>.generate(clientes.length, (i) {
-                    final c = clientes[i];
-                    final colorTipo = _colorTipo(c.tipo);
-                    final estadoColor = _estadoColor(c.estadoPago);
-                    return DataRow(
-                      onSelectChanged: (_) => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => HistorialComprasPage(cliente: c),
-                        ),
-                      ),
-                      cells: [
-                        DataCell(Text(c.nombre, style: cellStyle)),
-                        DataCell(Text(
-                          c.telefono.isEmpty ? '—' : c.telefono,
-                          style: cellStyle,
-                        )),
-                        DataCell(
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: colorTipo.withValues(alpha: 0.14),
-                              borderRadius: BorderRadius.circular(999),
-                              border: Border.all(
-                                color: colorTipo.withValues(alpha: 0.25),
-                              ),
-                            ),
-                            child: Text(
-                              _labelTipo(c.tipo),
-                              style: TextStyle(
-                                color: colorTipo,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
-                        ),
-                        DataCell(
-                          Text(
-                            'Bs ${c.saldoPendiente.toStringAsFixed(2)}',
-                            style: TextStyle(
-                              color: c.saldoPendiente > 0
-                                  ? const Color(0xFFFBBF24)
-                                  : Colors.white.withValues(alpha: 0.75),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                        DataCell(
-                          Row(
-                            children: [
-                              Container(
-                                width: 10,
-                                height: 10,
-                                decoration: BoxDecoration(
-                                  color: estadoColor,
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color:
-                                          estadoColor.withValues(alpha: 0.60),
-                                      blurRadius: 8,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                _labelEstado(c.estadoPago),
-                                style: cellStyle,
-                              ),
-                            ],
-                          ),
-                        ),
-                        const DataCell(
-                          Icon(Icons.chevron_right_rounded,
-                              color: Colors.white38, size: 18),
-                        ),
-                      ],
-                    );
-                  }),
+  Widget _buildCategoryTabs() {
+    return Container(
+      height: 40,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: 4,
+        itemBuilder: (context, index) {
+          final labels = ['Todos', 'Tiendas', 'Caseras', 'Deptos'];
+          final isSel = _tabCtrl.index == index;
+          return GestureDetector(
+            onTap: () {
+              setState(() => _tabCtrl.index = index);
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: isSel ? const Color(0xFF7C3AED) : Colors.white.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: isSel ? Colors.transparent : Colors.white.withValues(alpha: 0.1)),
+              ),
+              child: Text(
+                labels[index],
+                style: TextStyle(
+                  color: isSel ? Colors.white : Colors.white54,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
             ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Container(
+        height: 48,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        ),
+        child: TextField(
+          controller: _searchCtrl,
+          style: const TextStyle(color: Colors.white, fontSize: 14),
+          onChanged: (v) => setState(() => _busqueda = v),
+          decoration: InputDecoration(
+            border: InputBorder.none,
+            prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF7C3AED), size: 20),
+            hintText: 'Buscar por nombre o teléfono...',
+            hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 14),
+            contentPadding: const EdgeInsets.symmetric(vertical: 14),
           ),
         ),
       ),
     );
   }
 
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.people_outline_rounded, size: 64, color: Colors.white.withValues(alpha: 0.1)),
+          const SizedBox(height: 16),
+          Text('No se encontraron clientes', style: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 16)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPremiumTable(BuildContext context, List<Cliente> clientes) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E0B36).withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.vertical,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              headingRowColor: WidgetStateProperty.all(const Color(0xFF2D1155).withValues(alpha: 0.5)),
+              columnSpacing: 25,
+              dataRowMinHeight: 65,
+              dataRowMaxHeight: 75,
+              dividerThickness: 0.5,
+              horizontalMargin: 20,
+              showCheckboxColumn: true,
+              columns: [
+                const DataColumn(label: _HeaderCell('Nombre')),
+                const DataColumn(label: _HeaderCell('Teléfono')),
+                const DataColumn(label: _HeaderCell('Tipo')),
+                const DataColumn(label: _HeaderCell('Deuda')),
+                const DataColumn(label: _HeaderCell('Estado')),
+                const DataColumn(label: _HeaderCell('Acción')),
+              ],
+              rows: clientes.map((c) {
+                final colorT = _colorTipo(c.tipo);
+                final estCol = _estadoColor(c.estadoPago);
+                return DataRow(
+                  onSelectChanged: (_) => Navigator.push(context, MaterialPageRoute(builder: (_) => HistorialComprasPage(cliente: c))),
+                  cells: [
+                    DataCell(Text(c.nombre, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13))),
+                    DataCell(Text(c.telefono, style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 13))),
+                    DataCell(_buildTypeBadge(c.tipo, colorT)),
+                    DataCell(Text('Bs ${c.saldoPendiente.toStringAsFixed(2)}', 
+                      style: TextStyle(
+                        color: c.saldoPendiente > 0 ? const Color(0xFFFBBF24) : Colors.white.withValues(alpha: 0.6),
+                        fontWeight: FontWeight.w900, fontSize: 13))),
+                    DataCell(_buildStatusCell(c.estadoPago, estCol)),
+                    const DataCell(Icon(Icons.chevron_right_rounded, color: Colors.white24, size: 20)),
+                  ],
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTypeBadge(TipoCliente t, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Text(
+        _labelTipo(t).toUpperCase(),
+        style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+      ),
+    );
+  }
+
+  Widget _buildStatusCell(EstadoPago p, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8, height: 8,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            boxShadow: [BoxShadow(color: color.withValues(alpha: 0.5), blurRadius: 6, spreadRadius: 1)],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(_labelEstado(p), style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
+      ],
+    );
+  }
   Color _estadoColor(EstadoPago e) {
     switch (e) {
       case EstadoPago.puntual:
@@ -589,156 +581,20 @@ class _ClientesPageState extends State<ClientesPage>
 }
 
 // ─────────────────────────────────────────────
-//  Widget: Tarjeta de cliente
+//  Componentes de Tabla
 // ─────────────────────────────────────────────
-class _ClienteCard extends StatelessWidget {
-  final Cliente cliente;
-  final Color colorTipo;
-  final IconData iconTipo;
-  final String labelTipo;
-  final VoidCallback onTap;
-
-  const _ClienteCard({
-    required this.cliente,
-    required this.colorTipo,
-    required this.iconTipo,
-    required this.labelTipo,
-    required this.onTap,
-  });
-
+class _HeaderCell extends StatelessWidget {
+  final String label;
+  const _HeaderCell(this.label);
   @override
   Widget build(BuildContext context) {
-    final semColor = _semaforoColor(cliente.estadoPago);
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: colorTipo.withValues(alpha: 0.30)),
-          boxShadow: [
-            BoxShadow(
-              color: colorTipo.withValues(alpha: 0.10),
-              blurRadius: 12,
-              offset: const Offset(0, 3),
-            )
-          ],
-        ),
-        child: Row(
-          children: [
-            // Avatar
-            Container(
-              width: 46, height: 46,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    colorTipo.withValues(alpha: 0.30),
-                    colorTipo.withValues(alpha: 0.10),
-                  ],
-                ),
-                shape: BoxShape.circle,
-                border: Border.all(color: colorTipo.withValues(alpha: 0.50)),
-              ),
-              child: Icon(iconTipo, color: colorTipo, size: 22),
-            ),
-            const SizedBox(width: 12),
-
-            // Info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    cliente.nombre,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14),
-                  ),
-                  const SizedBox(height: 3),
-                  Row(
-                    children: [
-                      Icon(Icons.phone_rounded,
-                          size: 12,
-                          color: Colors.white.withValues(alpha: 0.40)),
-                      const SizedBox(width: 4),
-                      Text(
-                        cliente.telefono.isEmpty ? '—' : cliente.telefono,
-                        style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.40),
-                            fontSize: 11),
-                      ),
-                      const SizedBox(width: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: colorTipo.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          labelTipo,
-                          style: TextStyle(
-                              color: colorTipo,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (cliente.saldoPendiente > 0) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      'Deuda: Bs ${cliente.saldoPendiente.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                          color: Color(0xFFFBBF24),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-
-            // Semáforo indicador
-            Column(
-              children: [
-                Container(
-                  width: 12, height: 12,
-                  decoration: BoxDecoration(
-                    color: semColor,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                          color: semColor.withValues(alpha: 0.70),
-                          blurRadius: 6)
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Icon(Icons.chevron_right_rounded,
-                    color: Colors.white.withValues(alpha: 0.30), size: 18),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Color _semaforoColor(EstadoPago e) {
-    switch (e) {
-      case EstadoPago.puntual:
-        return const Color(0xFF10B981);
-      case EstadoPago.seRetrasa:
-        return const Color(0xFFF59E0B);
-      case EstadoPago.riesgo:
-        return const Color(0xFFEF4444);
-    }
+    return Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.5));
   }
 }
+
+// ─────────────────────────────────────────────
+//  Widget: Tarjeta de cliente
+// ─────────────────────────────────────────────
 
 // ─────────────────────────────────────────────
 //  Widget: Campo de texto reutilizable

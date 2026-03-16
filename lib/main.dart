@@ -8,6 +8,9 @@ import 'cobranza/cobranza.dart';
 import 'produccion/produccion.dart';
 import 'Salarios/pagos.dart';
 import 'compra/compras_page.dart';
+import 'dashboard/dashboard.dart';
+import 'analitica/analitica_page.dart';
+import 'inventario/inventario_page.dart';
 
 import 'package:intl/date_symbol_data_local.dart';
 
@@ -94,6 +97,9 @@ class MyApp extends StatelessWidget {
         '/produccion':  (_) => const ProduccionHubPage(),
         '/pagos':       (_) => const PagosPage(),
         '/compras':     (_) => const ComprasPage(),
+        '/dashboard':   (_) => const DashboardPage(),
+        '/analitica':   (_) => const AnaliticaPage(),
+        '/inventario':  (_) => const InventarioPage(),
       },
     );
   }
@@ -144,13 +150,6 @@ const List<_Modulo> _modulos = [
     textura: 'assets/images/aguayo_naranja.png',
   ),
   _Modulo(
-    titulo: 'Inventario',
-    icono: Icons.inventory_2_rounded,
-    gradiente: [Color(0xFF3B82F6), Color(0xFF60A5FA)],
-    ruta: '/inventario',
-    textura: 'assets/images/aguayo_azul.png',
-  ),
-  _Modulo(
     titulo: 'Producción',
     icono: Icons.precision_manufacturing_rounded,
     gradiente: [Color(0xFF8B5CF6), Color(0xFFA78BFA)],
@@ -173,7 +172,7 @@ const List<_Modulo> _modulos = [
   ),
   _Modulo(
     titulo: 'Dashboard',
-    icono: Icons.bar_chart_rounded,
+    icono: Icons.dashboard_rounded,
     gradiente: [Color(0xFF06B6D4), Color(0xFF22D3EE)],
     ruta: '/dashboard',
     textura: 'assets/images/aguayo_azul.png',
@@ -191,6 +190,13 @@ const List<_Modulo> _modulos = [
     gradiente: [Color(0xFFEF4444), Color(0xFFF87171)],
     ruta: '/ia-matices',
     textura: 'assets/images/aguayo_rojo.png',
+  ),
+  _Modulo(
+    titulo: 'Inventario',
+    icono: Icons.inventory_2_rounded,
+    gradiente: [Color(0xFF38BDF8), Color(0xFF7DD3FC)],
+    ruta: '/inventario',
+    textura: 'assets/images/aguayo_azul.png',
   ),
 ];
 
@@ -229,7 +235,10 @@ class _HomePageState extends State<HomePage>
     final size = MediaQuery.of(context).size;
 
     final gridModulos = _modulos
-        .where((m) => m.titulo != 'Urdido' && m.titulo != 'IA Matices')
+        .where((m) =>
+            m.titulo != 'Urdido' &&
+            m.titulo != 'IA Matices' &&
+            m.titulo != 'Salarios')
         .toList();
 
     final crossAxisCount = size.width < 600 ? 3 : 4;
