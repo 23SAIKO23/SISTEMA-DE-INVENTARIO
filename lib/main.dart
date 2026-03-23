@@ -11,6 +11,7 @@ import 'compra/compras_page.dart';
 import 'dashboard/dashboard.dart';
 import 'analitica/analitica_page.dart';
 import 'inventario/inventario_page.dart';
+import 'urdido/urdido_page.dart';
 
 import 'package:intl/date_symbol_data_local.dart';
 
@@ -100,6 +101,7 @@ class MyApp extends StatelessWidget {
         '/dashboard':   (_) => const DashboardPage(),
         '/analitica':   (_) => const AnaliticaPage(),
         '/inventario':  (_) => const InventarioPage(),
+        '/urdido':      (_) => const UrdidoPage(),
       },
     );
   }
