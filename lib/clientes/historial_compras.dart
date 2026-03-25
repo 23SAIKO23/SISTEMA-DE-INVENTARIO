@@ -1,43 +1,10 @@
 import 'package:flutter/material.dart';
 import 'modelos_cliente.dart';
+import '../services/app_service.dart';
+import '../ventas/modelos_venta.dart';
 
 // ─────────────────────────────────────────────
-//  Modelo Compra
-// ─────────────────────────────────────────────
-class Compra {
-  final String id;
-  final DateTime fecha;
-  final List<ItemCompra> items;
-  final double total;
-  final bool pagado;
-  final String? nota;
-
-  const Compra({
-    required this.id,
-    required this.fecha,
-    required this.items,
-    required this.total,
-    required this.pagado,
-    this.nota,
-  });
-}
-
-class ItemCompra {
-  final String producto;
-  final int cantidad;
-  final double precioUnit;
-
-  const ItemCompra({
-    required this.producto,
-    required this.cantidad,
-    required this.precioUnit,
-  });
-
-  double get subtotal => cantidad * precioUnit;
-}
-
-// ─────────────────────────────────────────────
-//  Página Historial de Compras
+//  Página Historial de Compras (Ventas del Cliente)
 // ─────────────────────────────────────────────
 class HistorialComprasPage extends StatefulWidget {
   final Cliente cliente;
@@ -49,63 +16,30 @@ class HistorialComprasPage extends StatefulWidget {
 }
 
 class _HistorialComprasPageState extends State<HistorialComprasPage> {
-  // Datos de ejemplo para el cliente
-  late List<Compra> _compras;
+  final _svc = AppService.instance;
 
   @override
   void initState() {
     super.initState();
-    // Genera compras de ejemplo relacionadas al cliente
-    _compras = [
-      Compra(
-        id: 'C001',
-        fecha: DateTime(2025, 2, 14),
-        items: const [
-          ItemCompra(producto: 'Manta aguayo grande', cantidad: 3, precioUnit: 120.0),
-          ItemCompra(producto: 'Bolso tejido', cantidad: 2, precioUnit: 45.0),
-        ],
-        total: 450.0,
-        pagado: true,
-      ),
-      Compra(
-        id: 'C002',
-        fecha: DateTime(2025, 3, 1),
-        items: const [
-          ItemCompra(producto: 'Camino de mesa', cantidad: 5, precioUnit: 70.0),
-        ],
-        total: 350.0,
-        pagado: false,
-        nota: 'Pago pendiente — acordado para fin de mes',
-      ),
-      Compra(
-        id: 'C003',
-        fecha: DateTime(2025, 3, 20),
-        items: const [
-          ItemCompra(producto: 'Bufanda artesanal', cantidad: 10, precioUnit: 38.0),
-          ItemCompra(producto: 'Gorro andino', cantidad: 6, precioUnit: 25.0),
-        ],
-        total: 530.0,
-        pagado: true,
-      ),
-      Compra(
-        id: 'C004',
-        fecha: DateTime(2025, 4, 5),
-        items: const [
-          ItemCompra(producto: 'Tapiz decorativo', cantidad: 2, precioUnit: 180.0),
-        ],
-        total: 360.0,
-        pagado: false,
-        nota: 'Abonó Bs 160. Resto pendiente.',
-      ),
-    ];
+    _svc.addListener(_onUpdate);
   }
 
-  double get _totalCompras =>
-      _compras.fold(0, (s, c) => s + c.total);
-  double get _totalPagado =>
-      _compras.where((c) => c.pagado).fold(0, (s, c) => s + c.total);
-  double get _totalDeuda =>
-      _compras.where((c) => !c.pagado).fold(0, (s, c) => s + c.total);
+  @override
+  void dispose() {
+    _svc.removeListener(_onUpdate);
+    super.dispose();
+  }
+
+  void _onUpdate() => setState(() {});
+
+  List<Venta> get _compras =>
+      _svc.ventas.where((v) => v.cliente == widget.cliente.nombre).toList()
+        ..sort((a, b) => b.fecha.compareTo(a.fecha));
+
+
+  double get _totalCompras => _compras.fold(0, (s, c) => s + c.total);
+  double get _totalPagado  => _compras.fold(0, (s, c) => s + c.montoPagado);
+  double get _totalDeuda   => _compras.fold(0, (s, c) => s + c.pendiente);
 
   @override
   Widget build(BuildContext context) {
@@ -311,7 +245,7 @@ class _StatBox extends StatelessWidget {
 //  Widget: Tarjeta de una compra
 // ─────────────────────────────────────────────
 class _CompraCard extends StatefulWidget {
-  final Compra compra;
+  final Venta compra;
   const _CompraCard({required this.compra});
 
   @override
@@ -324,7 +258,7 @@ class _CompraCardState extends State<_CompraCard> {
   @override
   Widget build(BuildContext context) {
     final c = widget.compra;
-    final color = c.pagado ? const Color(0xFF10B981) : const Color(0xFFF59E0B);
+    final color = c.saldado ? const Color(0xFF10B981) : const Color(0xFFF59E0B);
 
     return GestureDetector(
       onTap: () => setState(() => _expandido = !_expandido),
@@ -351,7 +285,7 @@ class _CompraCardState extends State<_CompraCard> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
-                    c.pagado
+                    c.saldado
                         ? Icons.receipt_long_rounded
                         : Icons.pending_actions_rounded,
                     color: color,
@@ -364,7 +298,7 @@ class _CompraCardState extends State<_CompraCard> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Pedido #${c.id}',
+                        'Pedido #${c.id.toString().padLeft(4, '0')}',
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w700,
@@ -400,7 +334,7 @@ class _CompraCardState extends State<_CompraCard> {
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        c.pagado ? 'Pagado' : 'Pendiente',
+                        c.saldado ? 'Saldado' : 'Pendiente',
                         style: TextStyle(
                           color: color,
                           fontSize: 9,
@@ -426,45 +360,45 @@ class _CompraCardState extends State<_CompraCard> {
               const SizedBox(height: 12),
               Divider(color: Colors.white.withValues(alpha: 0.08)),
               const SizedBox(height: 8),
-              ...c.items.map(
-                (item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(
-                    children: [
-                      Icon(Icons.fiber_manual_record,
-                          size: 6,
-                          color: Colors.white.withValues(alpha: 0.30)),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          item.producto,
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.75),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        '${item.cantidad}x  Bs ${item.precioUnit.toStringAsFixed(0)}',
+              
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  children: [
+                    Icon(Icons.fiber_manual_record,
+                        size: 6,
+                        color: Colors.white.withValues(alpha: 0.30)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Tipo: ${c.tipo.name} | Color: ${c.color.isEmpty ? '—' : c.color}',
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.45),
-                          fontSize: 11,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Bs ${item.subtotal.toStringAsFixed(0)}',
-                        style: const TextStyle(
-                          color: Colors.white,
+                          color: Colors.white.withValues(alpha: 0.75),
                           fontSize: 12,
-                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    Text(
+                      '${c.cantidad}x  Bs ${c.precioUnit.toStringAsFixed(0)}',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.45),
+                        fontSize: 11,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Bs ${c.total.toStringAsFixed(0)}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              if (c.nota != null) ...[
+              
+              if (!c.saldado) ...[
                 const SizedBox(height: 6),
                 Container(
                   padding: const EdgeInsets.all(10),
@@ -481,7 +415,7 @@ class _CompraCardState extends State<_CompraCard> {
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          c.nota!,
+                          'Abonado: Bs ${c.montoPagado.toStringAsFixed(2)} — Restante: Bs ${c.pendiente.toStringAsFixed(2)}',
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.65),
                             fontSize: 11,

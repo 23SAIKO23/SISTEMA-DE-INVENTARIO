@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'modelos_produccion.dart';
+import '../salarios/modelos_salarios.dart';
+import '../inventario/inventario_service.dart';
 
 // ── Paleta ─────────────────────────────────────
 const _kAzul       = Color(0xFF1565C0);
@@ -182,8 +184,10 @@ class _RegistroSemanalPageState extends State<RegistroSemanalPage> {
 
           // Lista de máquinas
           Expanded(
-            child: maquinas.isEmpty
-                ? const ProdEmpty('Sin máquinas agregadas aún')
+            child: _svc.isLoading
+                ? const Center(child: CircularProgressIndicator(color: _kVerde))
+                : maquinas.isEmpty
+                    ? const ProdEmpty('Sin máquinas agregadas aún')
                 : ListView.builder(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
                     itemCount: maquinas.length,
@@ -265,8 +269,64 @@ class _RegistroSemanalPageState extends State<RegistroSemanalPage> {
                     fontSize: 12)),
             const SizedBox(height: 20),
             
-            _Campo(ctrl: colorCtrl, label: 'Color (ej. Azul, Rojo...)',
-                icono: Icons.palette_rounded),
+            // Input de Color con Autocompletado
+            RawAutocomplete<String>(
+              optionsBuilder: (TextEditingValue textEditingValue) {
+                final colors = InventarioService.instance.todosLosColoresConocidos;
+                if (textEditingValue.text.isEmpty) return const Iterable<String>.empty();
+                return colors.where((String option) => 
+                    option.toLowerCase().contains(textEditingValue.text.toLowerCase()));
+              },
+              onSelected: (String selection) => colorCtrl.text = selection,
+              fieldViewBuilder: (ctx, tCtrl, focus, onFieldSubmitted) {
+                // Sincronizar tCtrl con colorCtrl si es necesario (o solo usar tCtrl)
+                tCtrl.addListener(() => colorCtrl.text = tCtrl.text); 
+                tCtrl.text = colorCtrl.text;
+                return TextField(
+                  controller: tCtrl,
+                  focusNode: focus,
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  decoration: InputDecoration(
+                    labelText: 'Color (ej. Azul, Rojo...)',
+                    labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.45), fontSize: 12),
+                    prefixIcon: const Icon(Icons.palette_rounded, color: _kAzulClaro, size: 17),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), 
+                        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.14))),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), 
+                        borderSide: const BorderSide(color: _kAzulClaro, width: 1.5)),
+                    filled: true, fillColor: Colors.white.withValues(alpha: 0.04),
+                  ),
+                );
+              },
+              optionsViewBuilder: (ctx, onSelected, options) {
+                return Align(
+                  alignment: Alignment.topLeft,
+                  child: Material(
+                    elevation: 4.0,
+                    color: const Color(0xFF0D2145),
+                    borderRadius: BorderRadius.circular(10),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 200, maxWidth: 350),
+                      child: ListView.builder(
+                        padding: EdgeInsets.zero,
+                        shrinkWrap: true,
+                        itemCount: options.length,
+                        itemBuilder: (BuildContext context, int index) {
+                          final String option = options.elementAt(index);
+                          return InkWell(
+                            onTap: () => onSelected(option),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              child: Text(option, style: const TextStyle(color: Colors.white, fontSize: 13)),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
             const SizedBox(height: 12),
             _Campo(ctrl: ctrl, label: 'Cantidad a SUMAR',
                 icono: Icons.add_box_rounded, numerico: true),
@@ -296,54 +356,96 @@ class _RegistroSemanalPageState extends State<RegistroSemanalPage> {
 
   void _abrirDialNuevaMaquina(BuildContext ctx) {
     final nCtrl = TextEditingController();
-    final tCtrl = TextEditingController();
+    String? trabSel;
+    final srv = SalariosService.instance;
+    srv.refresh(); // Asegurar carga fresca al abrir el diálogo
+    
     showModalBottomSheet(
       context: ctx,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 30),
-          decoration: const BoxDecoration(
-            color: Color(0xFF0D2145),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Container(width: 40, height: 4, margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(color: _kAzulClaro.withValues(alpha: 0.40),
-                borderRadius: BorderRadius.circular(4))),
-            const Text('Agregar Nueva Máquina',
-                style: TextStyle(color: Colors.white, fontSize: 16,
-                    fontWeight: FontWeight.w900)),
-            const SizedBox(height: 20),
+      builder: (_) => StatefulBuilder(
+        builder: (contextModal, setStateModal) => AnimatedBuilder(
+          animation: srv,
+          builder: (contextAnim, child) {
+            final lista = srv.trabajadores.map((e) => e.nombre).toList();
+            if (trabSel != null && !lista.contains(trabSel)) {
+              trabSel = null; // si se borró el empleado
+            }
             
-            _Campo(ctrl: nCtrl, label: 'Nombre de Máquina (ej. Máquina 5)',
-                icono: Icons.precision_manufacturing_rounded),
-            const SizedBox(height: 12),
-            _Campo(ctrl: tCtrl, label: 'Trabajador asignado',
-                icono: Icons.person_rounded),
-            const SizedBox(height: 20),
-            
-            SizedBox(width: double.infinity, child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _kAzulClaro, foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            return Padding(
+              padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 30),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF0D2145),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                ),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Container(width: 40, height: 4, margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(color: _kAzulClaro.withValues(alpha: 0.40),
+                      borderRadius: BorderRadius.circular(4))),
+                  const Text('Agregar Nueva Máquina',
+                      style: TextStyle(color: Colors.white, fontSize: 16,
+                          fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 20),
+                  
+                  _Campo(ctrl: nCtrl, label: 'Nombre de Máquina (ej. Máquina 5)',
+                      icono: Icons.precision_manufacturing_rounded),
+                  const SizedBox(height: 12),
+                  
+                  DropdownButtonFormField<String>(
+                    value: trabSel,
+                    decoration: InputDecoration(
+                      labelText: 'Trabajador asignado',
+                      labelStyle: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.45), fontSize: 12),
+                      prefixIcon: const Icon(Icons.person_rounded, color: _kAzulClaro, size: 17),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.14)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: _kAzulClaro, width: 1.5),
+                      ),
+                      filled: true,
+                      fillColor: Colors.white.withValues(alpha: 0.04),
+                    ),
+                    dropdownColor: const Color(0xFF0D2145),
+                    icon: Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white.withValues(alpha: 0.5)),
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    hint: srv.isLoading ? const Text('Cargando trabajadores...', style: TextStyle(color: Colors.white54, fontSize: 13)) : null,
+                    items: lista.map((t) => DropdownMenuItem(
+                      value: t,
+                      child: Text(t),
+                    )).toList(),
+                    onChanged: (v) => setStateModal(() => trabSel = v),
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  SizedBox(width: double.infinity, child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _kAzulClaro, foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: () {
+                      if (nCtrl.text.trim().isEmpty || trabSel == null) return;
+                      final m = Maquina(
+                        id: 'M${DateTime.now().millisecondsSinceEpoch.toString().substring(9)}',
+                        nombre: nCtrl.text.trim(),
+                        trabajadorAsignado: trabSel!,
+                      );
+                      _svc.agregarMaquina(m);
+                      Navigator.pop(ctx);
+                    },
+                    child: const Text('Crear Máquina', style: TextStyle(fontWeight: FontWeight.w800)),
+                  )),
+                ]),
               ),
-              onPressed: () {
-                if (nCtrl.text.trim().isEmpty || tCtrl.text.trim().isEmpty) return;
-                final m = Maquina(
-                  id: 'M${DateTime.now().millisecondsSinceEpoch.toString().substring(9)}',
-                  nombre: nCtrl.text.trim(),
-                  trabajadorAsignado: tCtrl.text.trim(),
-                );
-                _svc.agregarMaquina(m);
-                Navigator.pop(ctx);
-              },
-              child: const Text('Crear Máquina', style: TextStyle(fontWeight: FontWeight.w800)),
-            )),
-          ]),
+            );
+          }
         ),
       ),
     );

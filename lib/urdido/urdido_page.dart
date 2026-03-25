@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'urdido_models.dart';
 import 'matriz_visual_widget.dart';
+import 'crear_urdido_page.dart';
 
 // Colores del Aguayo para la interfaz
 const _kNaranja = Color(0xFFF97316); 
@@ -110,6 +111,22 @@ class _UrdidoPageState extends State<UrdidoPage> {
           'Secuencia de Urdido',
           style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1),
         ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: _kNaranja,
+        onPressed: () async {
+          final nuevaArmada = await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const CrearUrdidoPage()),
+          );
+          if (nuevaArmada != null && nuevaArmada is Armada) {
+            setState(() {
+              recetaActual.armadas.add(nuevaArmada);
+            });
+          }
+        },
+        icon: const Icon(Icons.palette_rounded, color: Colors.white),
+        label: const Text('Pintar Armada', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
       body: Container(
         decoration: const BoxDecoration(
@@ -247,50 +264,70 @@ class _UrdidoPageState extends State<UrdidoPage> {
         children: [
           // Header de la armada
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: _kNaranja,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
                     'Paso $numero',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     armada.titulo,
-                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                    style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
                   ),
+                ),
+                IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  icon: const Icon(Icons.edit_rounded, color: Colors.white54, size: 18),
+                  onPressed: () async {
+                    final armadaEditada = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => CrearUrdidoPage(armadaEdicion: armada)
+                      ),
+                    );
+                    if (armadaEditada != null && armadaEditada is Armada) {
+                      setState(() {
+                        int idx = recetaActual.armadas.indexOf(armada);
+                        if (idx != -1) {
+                          recetaActual.armadas[idx] = armadaEditada;
+                        }
+                      });
+                    }
+                  },
                 ),
               ],
             ),
           ),
           
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Text(
               armada.descripcion,
-              style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13, height: 1.4),
+              style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 11, height: 1.3),
             ),
           ),
           
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
           
           // Row layout para info y matriz
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Info instrucciones
                 Expanded(
-                  flex: 3,
                   child: Column(
                     children: [
                       _buildInstruccionBox(
@@ -309,12 +346,29 @@ class _UrdidoPageState extends State<UrdidoPage> {
                   ),
                 ),
                 
-                const SizedBox(width: 20),
-                
-                // Matriz Visual (ocupando menos espacio a la derecha)
-                Expanded(
-                  flex: 4,
-                  child: MatrizFileteraWidget(matrizHilos: armada.matrizHilos),
+                // Matriz Visual interactiva (ocupando su espacio natural exacto)
+                GestureDetector(
+                  onTap: () {
+                    showDialog(
+                      context: context,
+                      builder: (context) => Dialog(
+                        backgroundColor: Colors.transparent,
+                        insetPadding: const EdgeInsets.all(20),
+                        child: MatrizFileteraWidget(
+                          matrizHilos: armada.matrizHilos,
+                          conoSize: 24.0, // Tamaño gigante para el zoom
+                          fontSize: 16.0,
+                        ),
+                      ),
+                    );
+                  },
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.zoomIn,
+                    child: Tooltip(
+                      message: 'Toca para agrandar',
+                      child: MatrizFileteraWidget(matrizHilos: armada.matrizHilos),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -359,12 +413,12 @@ class _UrdidoPageState extends State<UrdidoPage> {
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text(
             value,
             style: TextStyle(
               color: isAccented ? Colors.white : Colors.white.withOpacity(0.9),
-              fontSize: isAccented ? 15 : 14,
+              fontSize: isAccented ? 13 : 12,
               fontWeight: FontWeight.bold,
             ),
           ),

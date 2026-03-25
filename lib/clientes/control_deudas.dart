@@ -30,15 +30,15 @@ class ControlDeudasPage extends StatefulWidget {
 
 class _ControlDeudasPageState extends State<ControlDeudasPage> {
   // Abonos de ejemplo por cliente id
-  final Map<String, List<Abono>> _abonos = {
-    '1': [
+  final Map<int, List<Abono>> _abonos = {
+    1: [
       Abono(fecha: DateTime(2025, 2, 10), monto: 150, nota: 'Abono inicial'),
     ],
-    '3': [
+    3: [
       Abono(fecha: DateTime(2025, 1, 5), monto: 400, nota: 'Primer pago'),
       Abono(fecha: DateTime(2025, 2, 20), monto: 200, nota: 'Segundo pago'),
     ],
-    '4': [],
+    4: [],
   };
 
   List<Cliente> get _conDeuda =>
@@ -324,9 +324,6 @@ class _ControlDeudasPageState extends State<ControlDeudasPage> {
                     nota: notaCtrl.text,
                   ),
                 );
-                if (cliente.saldoPendiente == 0) {
-                  cliente.estadoPago = EstadoPago.puntual;
-                }
               });
               Navigator.pop(context);
             },

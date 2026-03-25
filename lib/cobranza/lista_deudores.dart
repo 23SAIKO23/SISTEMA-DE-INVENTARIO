@@ -1,4 +1,8 @@
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import '../services/app_service.dart';
 import '../ventas/modelos_venta.dart';
 import 'cobranza_widgets.dart';
@@ -205,60 +209,163 @@ class _ListaDeudoresState extends State<ListaDeudores>
 
   void _dialogAbonar(BuildContext ctx, Venta v) {
     final montoCtrl = TextEditingController();
+    
+    String? comprobanteB64;
+    Uint8List? previewBytes;
+
     showDialog(
       context: ctx,
-      builder: (_) => AlertDialog(
-        backgroundColor: _kFondo2,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: _kAzulClaro.withValues(alpha: 0.40)),
-        ),
-        title: Row(children: [
-          CobIconoDialog(icono: Icons.add_card_rounded, color: _kVerde),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-              const Text('Registrar abono',
-                  style: TextStyle(color: Colors.white, fontSize: 14,
-                      fontWeight: FontWeight.w700)),
-              Text(v.cliente,
-                  style: TextStyle(
-                      color: _kAzulClaro.withValues(alpha: 0.80),
-                      fontSize: 11)),
-            ]),
-          ),
-        ]),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          CobFilaInfo('Deuda total', 'Bs ${v.total.toStringAsFixed(2)}', Colors.white70),
-          const SizedBox(height: 4),
-          CobFilaInfo('Pendiente', 'Bs ${v.pendiente.toStringAsFixed(2)}', _kRojo),
-          const SizedBox(height: 14),
-          CobCampo(ctrl: montoCtrl, label: 'Monto abono (Bs)',
-              icono: Icons.attach_money_rounded, numerico: true),
-        ]),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancelar',
-                style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.40))),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _kVerde, foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+      builder: (_) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            backgroundColor: _kFondo2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(color: _kAzulClaro.withValues(alpha: 0.40)),
             ),
-            onPressed: () {
-              final m = double.tryParse(montoCtrl.text) ?? 0;
-              if (m > 0) _svc.registrarAbono(v.id, m);
-              Navigator.pop(ctx);
-            },
-            child: const Text('Abonar',
-                style: TextStyle(fontWeight: FontWeight.w700)),
-          ),
-        ],
+            title: Row(children: [
+              const CobIconoDialog(icono: Icons.add_card_rounded, color: _kVerde),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  const Text('Registrar abono',
+                      style: TextStyle(color: Colors.white, fontSize: 14,
+                          fontWeight: FontWeight.w700)),
+                  Text(v.cliente,
+                      style: TextStyle(
+                          color: _kAzulClaro.withValues(alpha: 0.80),
+                          fontSize: 11)),
+                ]),
+              ),
+            ]),
+            content: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                CobResumenVenta(v),
+                const SizedBox(height: 14),
+                CobCampo(ctrl: montoCtrl, label: 'Monto abono (Bs)',
+                    icono: Icons.attach_money_rounded, numerico: true),
+                const SizedBox(height: 14),
+                
+                // Botones de respaldo
+                Row(children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _kAzulClaro,
+                        side: BorderSide(color: _kAzulClaro.withValues(alpha: 0.3)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      icon: const Icon(Icons.add_photo_alternate_rounded, size: 18),
+                      label: const Text('Foto Comp.', style: TextStyle(fontSize: 10)),
+                      onPressed: () async {
+                        try {
+                          final result = await FilePicker.platform.pickFiles(
+                            type: FileType.image,
+                            withData: true,
+                            allowMultiple: false,
+                          );
+                          
+                          if (result != null && result.files.single.bytes != null) {
+                            final bytes = result.files.single.bytes!;
+                            final b64 = await compute(base64Encode, bytes);
+                            await Future.delayed(const Duration(milliseconds: 50));
+                            if (context.mounted) {
+                              setDialogState(() {
+                                previewBytes = bytes;
+                                comprobanteB64 = b64;
+                              });
+                            }
+                          }
+                        } catch (e) {
+                          debugPrint('Error picking file: $e');
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _kVerdeClaro,
+                        side: BorderSide(color: _kVerdeClaro.withValues(alpha: 0.3)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      icon: const Icon(Icons.draw_rounded, size: 18),
+                      label: const Text('Firma Digital', style: TextStyle(fontSize: 10)),
+                      onPressed: () async {
+                        final Uint8List? bytes = await showDialog(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (_) => const CobDialogFirma(),
+                        );
+                        if (bytes != null) {
+                          final b64 = await compute(base64Encode, bytes);
+                          await Future.delayed(const Duration(milliseconds: 50));
+                          if (context.mounted) {
+                            setDialogState(() {
+                              previewBytes = bytes;
+                              comprobanteB64 = b64;
+                            });
+                          }
+                        }
+                      },
+                    ),
+                  ),
+                ]),
+                
+                // Preview imagen
+                if (previewBytes != null) ...[
+                  const SizedBox(height: 12),
+                  Stack(
+                    alignment: Alignment.topRight,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.memory(previewBytes!, height: 120, fit: BoxFit.cover),
+                      ),
+                      IconButton(
+                        icon: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                          child: const Icon(Icons.close, color: Colors.white, size: 16),
+                        ),
+                        onPressed: () => setDialogState(() {
+                          previewBytes = null;
+                          comprobanteB64 = null;
+                        }),
+                      )
+                    ],
+                  ),
+                ],
+              ]),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text('Cancelar',
+                    style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.40))),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _kVerde, foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () {
+                  final m = double.tryParse(montoCtrl.text) ?? 0;
+                  if (m > 0) _svc.registrarAbono(v.id, m, comprobanteB64: comprobanteB64);
+                  Navigator.pop(ctx);
+                },
+                child: const Text('Abonar',
+                    style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
+            ],
+          );
+        }
       ),
     );
   }
@@ -273,189 +380,89 @@ class _ListaDeudores extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (lista.isEmpty) return const CobEmpty('Sin registros en esta categoría');
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
-      itemCount: lista.length,
-      itemBuilder: (_, i) => _TarjetaDeudor(
-        venta: lista[i],
-        onAbonar: onAbonar != null ? () => onAbonar!(lista[i]) : null,
-      ),
-    );
-  }
-}
-
-// ── Tarjeta de deudor ─────────────────────────
-class _TarjetaDeudor extends StatelessWidget {
-  final Venta venta;
-  final VoidCallback? onAbonar;
-  const _TarjetaDeudor({required this.venta, this.onAbonar});
-
-  Color get _color {
-    if (venta.saldado) return _kVerde;
-    if (DateTime.now().difference(venta.fecha).inDays > 30) return _kRojo;
-    if (venta.progreso >= 0.5) return _kVerdeClaro;
-    return _kAzulClaro;
-  }
-
-  String get _estado {
-    if (venta.saldado) return '✅ Saldado';
-    if (DateTime.now().difference(venta.fecha).inDays > 30) return '🔴 Vencido';
-    if (venta.progreso >= 0.5) return '🔵 Buen avance';
-    return '🟡 Pendiente';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final color = _color;
-    final diasDesdeFecha = DateTime.now().difference(venta.fecha).inDays;
-
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       decoration: BoxDecoration(
-        color: _kFondo2, borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.45), width: 1.5),
-        boxShadow: [BoxShadow(color: color.withValues(alpha: 0.10),
-            blurRadius: 12, offset: const Offset(0, 3))],
+        color: _kFondo2.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 10, offset: const Offset(0, 4))
+        ],
       ),
-      child: Column(children: [
-        Container(height: 3, decoration: BoxDecoration(
-          gradient: const LinearGradient(
-              colors: [_kAzul, _kAzulClaro, _kVerde, _kVerdeClaro]),
-          borderRadius:
-              const BorderRadius.vertical(top: Radius.circular(15)),
-        )),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
-          child: Column(children: [
-            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              // Avatar
-              Container(
-                width: 46, height: 46,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                      colors: [_kAzul, color],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Center(child: Text(
-                    venta.cliente[0].toUpperCase(),
-                    style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.w900,
-                        fontSize: 18))),
-              ),
-              const SizedBox(width: 12),
-              Expanded(child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(venta.cliente,
-                    style: const TextStyle(color: Colors.white,
-                        fontWeight: FontWeight.w800, fontSize: 14)),
-                const SizedBox(height: 2),
-                Text(venta.color.isEmpty ? 'Venta #${venta.id}' : venta.color,
-                    style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.50),
-                        fontSize: 11)),
-                const SizedBox(height: 4),
-                CobBadgeFecha(
-                  texto: diasDesdeFecha > 30
-                      ? 'Vencido hace $diasDesdeFecha días'
-                      : 'Hace $diasDesdeFecha día(s)',
-                  color: color,
-                ),
-              ])),
-              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                Text('Bs ${venta.pendiente.toStringAsFixed(0)}',
-                    style: TextStyle(color: color,
-                        fontWeight: FontWeight.w900, fontSize: 18)),
-                Text('pendiente',
-                    style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.35),
-                        fontSize: 9)),
-              ]),
-            ]),
-            const SizedBox(height: 10),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          // Cabecera
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: _kAzul.withValues(alpha: 0.15),
+              border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
+            ),
+            child: const Row(
+              children: [
+                Expanded(flex: 2, child: Text('Cliente', style: TextStyle(color: _kAzulClaro, fontWeight: FontWeight.bold, fontSize: 12))),
+                Expanded(flex: 2, child: Text('Tipo / Color', style: TextStyle(color: _kAzulClaro, fontWeight: FontWeight.bold, fontSize: 12))),
+                Expanded(flex: 2, child: Text('Detalle Compra', style: TextStyle(color: _kAzulClaro, fontWeight: FontWeight.bold, fontSize: 12))),
+                Expanded(flex: 2, child: Text('Vencimiento', style: TextStyle(color: _kAzulClaro, fontWeight: FontWeight.bold, fontSize: 12))),
+                Expanded(flex: 2, child: Padding(padding: EdgeInsets.only(left: 16), child: Text('Pendiente', textAlign: TextAlign.right, style: TextStyle(color: _kAzulClaro, fontWeight: FontWeight.bold, fontSize: 12)))),
+                Expanded(flex: 2, child: Text('Acciones', textAlign: TextAlign.right, style: TextStyle(color: _kAzulClaro, fontWeight: FontWeight.bold, fontSize: 12))),
+              ],
+            ),
+          ),
+          // Cuerpo
+          Expanded(
+            child: ListView.builder(
+              padding: EdgeInsets.zero,
+              itemCount: lista.length,
+              itemBuilder: (context, i) {
+                final venta = lista[i];
+                final color = venta.saldado ? _kVerde : (DateTime.now().difference(venta.fecha).inDays > 30 ? _kRojo : (venta.progreso >= 0.5 ? _kVerdeClaro : _kAzulClaro));
+                final diasDesdeFecha = DateTime.now().difference(venta.fecha).inDays;
+                String vencimiento = diasDesdeFecha > 30 ? 'Vencido hace $diasDesdeFecha d.' : 'Hace $diasDesdeFecha d.';
+                String estado = venta.saldado ? '✅ Saldado' : (diasDesdeFecha > 30 ? '🔴 Vencido' : (venta.progreso >= 0.5 ? '🔵 Buen avance' : '🟡 Pendiente'));
 
-            Stack(children: [
-              Container(height: 6, decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.07),
-                borderRadius: BorderRadius.circular(6),
-              )),
-              FractionallySizedBox(
-                widthFactor: venta.progreso,
-                child: Container(height: 6, decoration: BoxDecoration(
-                  gradient: LinearGradient(colors: [_kAzulClaro, color]),
-                  borderRadius: BorderRadius.circular(6),
-                  boxShadow: [BoxShadow(
-                      color: color.withValues(alpha: 0.50), blurRadius: 6)],
-                )),
-              ),
-            ]),
-            const SizedBox(height: 6),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Text(_estado, style: TextStyle(color: color, fontSize: 11,
-                  fontWeight: FontWeight.w700)),
-              Text('Bs ${venta.montoPagado.toStringAsFixed(0)} de '
-                  'Bs ${venta.total.toStringAsFixed(0)}',
-                  style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.40),
-                      fontSize: 10)),
-            ]),
-
-            if (!venta.saldado && onAbonar != null) ...[
-              const SizedBox(height: 8),
-              // Fecha de la venta
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 7),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.04),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.08)),
-                ),
-                child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                  Row(children: [
-                    Icon(Icons.calendar_month_rounded, size: 12,
-                        color: _kAzulClaro.withValues(alpha: 0.70)),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Fecha venta: ${venta.fecha.day}/${venta.fecha.month}/${venta.fecha.year}',
-                      style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.55),
-                          fontSize: 11),
-                    ),
-                  ]),
-                  Text('${venta.historialAbonos.length} abono(s)',
-                      style: TextStyle(
-                          color: _kVerdeClaro.withValues(alpha: 0.70),
-                          fontSize: 10, fontWeight: FontWeight.w600)),
-                ]),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: color,
-                    side: BorderSide(color: color.withValues(alpha: 0.60)),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: i.isEven ? Colors.transparent : Colors.white.withValues(alpha: 0.02),
+                    border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.05))),
                   ),
-                  icon: const Icon(Icons.add_rounded, size: 15),
-                  label: const Text('Registrar abono',
-                      style: TextStyle(fontSize: 12,
-                          fontWeight: FontWeight.w700)),
-                  onPressed: onAbonar,
-                ),
-              ),
-            ],
-          ]),
-        ),
-      ]),
+                  child: Row(
+                    children: [
+                      Expanded(flex: 2, child: Text(venta.cliente, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 12))),
+                      Expanded(flex: 2, child: Text(venta.color.isEmpty ? venta.tipo.name.toUpperCase() : '${venta.tipo.name.toUpperCase()} · ${venta.color}', style: const TextStyle(color: Colors.white, fontSize: 12))),
+                      Expanded(flex: 2, child: Text('${venta.cantidad.toStringAsFixed(0)} u. x Bs ${venta.precioUnit.toStringAsFixed(1)}', style: const TextStyle(color: Colors.white, fontSize: 12))),
+                      Expanded(flex: 2, child: Text(vencimiento, style: TextStyle(color: diasDesdeFecha > 30 ? _kRojo : Colors.white.withValues(alpha: 0.7), fontSize: 12))),
+                      Expanded(flex: 2, child: Padding(padding: const EdgeInsets.only(left: 16), child: Text('Bs ${venta.pendiente.toStringAsFixed(0)}', textAlign: TextAlign.right, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12)))),
+                      Expanded(flex: 2, child: Align(
+                        alignment: Alignment.centerRight,
+                        child: onAbonar == null ? const SizedBox.shrink() : 
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _kVerde.withValues(alpha: 0.15),
+                              foregroundColor: _kVerdeClaro,
+                              elevation: 0,
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              side: BorderSide(color: _kVerde.withValues(alpha: 0.3)),
+                            ),
+                            icon: const Icon(Icons.add, size: 16),
+                            label: const Text('Abonar', style: TextStyle(fontSize: 12)),
+                            onPressed: () => onAbonar!(venta),
+                          ),
+                      )),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
+
 

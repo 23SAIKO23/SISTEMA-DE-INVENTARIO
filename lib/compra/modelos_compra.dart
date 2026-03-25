@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
 
 enum TipoTransaccion { entregaMaterial, pagoEfectivo }
 
@@ -19,6 +20,9 @@ class TransaccionCompra {
   // Ruta de la foto adjunta del comprobante de transferencia o recibo (opcional)
   final String? comprobantePath;
 
+  // Firma digital en formato Base64 (opcional)
+  final String? firmaB64;
+
   // Saldo resultante después de aplicar esta transacción
   double saldoDespuesTransaccion;
 
@@ -32,8 +36,25 @@ class TransaccionCompra {
     this.montoPagado,
     this.detalleExtra,
     this.comprobantePath,
+    this.firmaB64,
     this.saldoDespuesTransaccion = 0.0,
   });
+
+  factory TransaccionCompra.fromJson(Map<String, dynamic> json) {
+    return TransaccionCompra(
+      id: json['id'].toString(),
+      fecha: DateTime.parse(json['fecha']),
+      tipo: json['tipo'] == 'entregaMaterial' ? TipoTransaccion.entregaMaterial : TipoTransaccion.pagoEfectivo,
+      detalleMateriaPrima: json['detalle_materia_prima'],
+      kilos: json['kilos'] != null ? double.parse(json['kilos'].toString()) : null,
+      importeCobrado: json['importe_cobrado'] != null ? double.parse(json['importe_cobrado'].toString()) : null,
+      montoPagado: json['monto_pagado'] != null ? double.parse(json['monto_pagado'].toString()) : null,
+      detalleExtra: json['detalle_extra'],
+      comprobantePath: json['comprobante_path'],
+      firmaB64: json['firma_b64'],
+      saldoDespuesTransaccion: json['saldo_acumulado'] != null ? double.parse(json['saldo_acumulado'].toString()) : 0.0,
+    );
+  }
 }
 
 class Proveedor {
@@ -61,6 +82,14 @@ class Proveedor {
     required this.empresa,
     List<TransaccionCompra>? historial,
   }) : historial = historial ?? [];
+
+  factory Proveedor.fromJson(Map<String, dynamic> json) {
+    return Proveedor(
+      id: json['id'].toString(),
+      nombre: json['nombre'],
+      empresa: json['empresa'],
+    );
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -70,67 +99,77 @@ class ComprasService extends ChangeNotifier {
   static final ComprasService instance = ComprasService._();
   ComprasService._();
 
-  final List<Proveedor> _proveedores = [
-    Proveedor(
-      id: 'PRV001', nombre: 'Juan Pérez', empresa: 'Distribuidora San Juan',
-      historial: [
-        TransaccionCompra(
-          id: 'TX001', fecha: DateTime(2026, 2, 10, 8, 30),
-          tipo: TipoTransaccion.entregaMaterial,
-          detalleMateriaPrima: '38 bolsas a 6kg', kilos: 228.0, importeCobrado: 18924.0,
-        )..saldoDespuesTransaccion = 18924.0,
-        TransaccionCompra(
-          id: 'TX002', fecha: DateTime(2026, 2, 10, 8, 35),
-          tipo: TipoTransaccion.pagoEfectivo, montoPagado: 15000.0,
-        )..saldoDespuesTransaccion = 3924.0, 
-        // Modificado a un abono de 15,000 para que refleje una deuda pendiente real en rojo
-      ]
-    ),
-    Proveedor(
-      id: 'PRV002', nombre: 'María Gómez', empresa: 'Hilos El Sol',
-    ),
-  ];
+  final _api = ApiService.instance;
+  final List<Proveedor> _proveedores = [];
+  bool cargando = false;
 
   List<Proveedor> get proveedores => List.unmodifiable(_proveedores);
 
-  void agregarProveedor(String nombre, String empresa) {
-    _proveedores.add(Proveedor(
-      id: 'PRV${DateTime.now().millisecondsSinceEpoch}',
-      nombre: nombre,
-      empresa: empresa,
-    ));
+  Future<void> cargarProveedores() async {
+    cargando = true;
+    notifyListeners();
+    try {
+      final data = await _api.listarProveedores();
+      _proveedores.clear();
+      for (final p in data) {
+        final prov = Proveedor.fromJson(p as Map<String, dynamic>);
+        // Cargar también transacciones para cada proveedor
+        final txs = await _api.listarTransacciones(int.parse(prov.id));
+        prov.historial.clear();
+        for (final t in txs) {
+          prov.historial.add(TransaccionCompra.fromJson(t as Map<String, dynamic>));
+        }
+        _proveedores.add(prov);
+      }
+    } catch (e) {
+      debugPrint('Error cargando proveedores: $e');
+    }
+    cargando = false;
     notifyListeners();
   }
 
-  void registrarEntregaMaterial(Proveedor proveedor, String detalle, double kilos, double importeCobrado, {String? comprobantePath, DateTime? fechaRegistro, String? detalleExtra}) {
-    double saldoPrevio = proveedor.saldoDeudorActual;
-    final tx = TransaccionCompra(
-      id: 'TX${DateTime.now().millisecondsSinceEpoch}',
-      fecha: fechaRegistro ?? DateTime.now(),
-      tipo: TipoTransaccion.entregaMaterial,
-      detalleMateriaPrima: detalle,
-      kilos: kilos,
-      importeCobrado: importeCobrado,
-      comprobantePath: comprobantePath,
-      detalleExtra: detalleExtra,
-    );
-    tx.saldoDespuesTransaccion = saldoPrevio + importeCobrado;
-    proveedor.historial.insert(0, tx); // Al principio para ver el más reciente arriba
-    notifyListeners();
+  Future<void> agregarProveedor(String nombre, String empresa) async {
+    try {
+      await _api.agregarProveedor(nombre, empresa);
+      await cargarProveedores();
+    } catch (e) {
+      debugPrint('Error al agregar proveedor: $e');
+    }
   }
 
-  void registrarPagoEfectivo(Proveedor proveedor, double montoPagado, {String? comprobantePath, DateTime? fechaRegistro, String? detalleExtra}) {
-    double saldoPrevio = proveedor.saldoDeudorActual;
-    final tx = TransaccionCompra(
-      id: 'TX${DateTime.now().millisecondsSinceEpoch}',
-      fecha: fechaRegistro ?? DateTime.now(),
-      tipo: TipoTransaccion.pagoEfectivo,
-      montoPagado: montoPagado,
-      comprobantePath: comprobantePath,
-      detalleExtra: detalleExtra,
-    );
-    tx.saldoDespuesTransaccion = saldoPrevio - montoPagado;
-    proveedor.historial.insert(0, tx);
-    notifyListeners();
+  Future<void> registrarEntregaMaterial(Proveedor proveedor, String detalle, double kilos, double importeCobrado, {String? comprobantePath, String? firmaB64, DateTime? fechaRegistro, String? detalleExtra}) async {
+    try {
+      await _api.agregarTransaccion({
+        'proveedor_id': int.parse(proveedor.id),
+        'tipo': 'entregaMaterial',
+        'detalle_materia_prima': detalle,
+        'kilos': kilos,
+        'importe_cobrado': importeCobrado,
+        'comprobante_path': comprobantePath,
+        'firma_b64': firmaB64,
+        'fecha': (fechaRegistro ?? DateTime.now()).toIso8601String(),
+        'detalle_extra': detalleExtra,
+      });
+      await cargarProveedores();
+    } catch (e) {
+      debugPrint('Error al registrar entrega: $e');
+    }
+  }
+
+  Future<void> registrarPagoEfectivo(Proveedor proveedor, double montoPagado, {String? comprobantePath, String? firmaB64, DateTime? fechaRegistro, String? detalleExtra}) async {
+    try {
+      await _api.agregarTransaccion({
+        'proveedor_id': int.parse(proveedor.id),
+        'tipo': 'pagoEfectivo',
+        'monto_pagado': montoPagado,
+        'comprobante_path': comprobantePath,
+        'firma_b64': firmaB64,
+        'fecha': (fechaRegistro ?? DateTime.now()).toIso8601String(),
+        'detalle_extra': detalleExtra,
+      });
+      await cargarProveedores();
+    } catch (e) {
+      debugPrint('Error al registrar pago: $e');
+    }
   }
 }

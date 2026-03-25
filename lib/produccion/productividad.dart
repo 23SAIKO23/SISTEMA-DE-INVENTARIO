@@ -77,9 +77,11 @@ class _ProductividadPageState extends State<ProductividadPage> {
 
           // Lista trabajadores
           Expanded(
-            child: trabajadores.isEmpty
-                ? const ProdEmpty('No hay máquinas asignadas a trabajadores')
-                : ListView(
+            child: _svc.isLoading
+                ? const Center(child: CircularProgressIndicator(color: _kAmbar))
+                : trabajadores.isEmpty
+                    ? const ProdEmpty('No hay máquinas asignadas a trabajadores')
+                    : ListView(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
                     children: [
                       const _SeccionTitle('RANKING PROMEDIO SEMANAL'),

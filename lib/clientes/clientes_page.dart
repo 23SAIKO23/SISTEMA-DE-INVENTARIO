@@ -3,6 +3,7 @@ import 'modelos_cliente.dart';
 import 'historial_compras.dart';
 import 'control_deudas.dart';
 import 'semaforo_pago.dart';
+import '../services/api_service.dart';
 
 export 'modelos_cliente.dart';
 
@@ -22,50 +23,32 @@ class _ClientesPageState extends State<ClientesPage>
   final TextEditingController _searchCtrl = TextEditingController();
   String _busqueda = '';
 
+  final _api = ApiService.instance;
+  List<Cliente> _clientes = [];
+  bool _cargando = true;
+  String? _error;
 
-  // Datos de ejemplo
-  final List<Cliente> _clientes = [
-    Cliente(
-      id: '1',
-      nombre: 'Tienda Don Pepe',
-      telefono: '70012345',
-      direccion: 'Av. Potosí 123',
-      tipo: TipoCliente.tienda,
-      saldoPendiente: 350.0,
-      estadoPago: EstadoPago.seRetrasa,
-      fechaRegistro: DateTime(2024, 3, 10),
-    ),
-    Cliente(
-      id: '2',
-      nombre: 'Doña Carmen',
-      telefono: '71198765',
-      direccion: 'Calle Junín 45',
-      tipo: TipoCliente.casera,
-      saldoPendiente: 0.0,
-      estadoPago: EstadoPago.puntual,
-      fechaRegistro: DateTime(2024, 5, 22),
-    ),
-    Cliente(
-      id: '3',
-      nombre: 'Distribuidora Alteña',
-      telefono: '72345678',
-      direccion: 'El Alto, Zona 16 de Julio',
-      tipo: TipoCliente.departamento,
-      saldoPendiente: 1200.0,
-      estadoPago: EstadoPago.riesgo,
-      fechaRegistro: DateTime(2023, 11, 1),
-    ),
-    Cliente(
-      id: '4',
-      nombre: 'Tienda La Estrella',
-      telefono: '68899001',
-      direccion: 'Mercado Rodríguez',
-      tipo: TipoCliente.tienda,
-      saldoPendiente: 80.0,
-      estadoPago: EstadoPago.puntual,
-      fechaRegistro: DateTime(2025, 1, 15),
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _tabCtrl = TabController(length: 4, vsync: this);
+    _tabCtrl.addListener(() => setState(() {}));
+    _cargarClientes();
+  }
+
+  Future<void> _cargarClientes() async {
+    setState(() { _cargando = true; _error = null; });
+    try {
+      final data = await _api.listarClientes();
+      setState(() {
+        _clientes = (data as List).map((j) => Cliente.fromJson(j)).toList();
+        _cargando = false;
+      });
+    } catch (e) {
+      setState(() { _error = 'Error al conectar con el servidor'; _cargando = false; });
+    }
+  }
+
 
   List<Cliente> get _filtrados {
     final q = _busqueda.toLowerCase();
@@ -79,13 +62,6 @@ class _ClientesPageState extends State<ClientesPage>
           c.telefono.contains(q);
       return matchTab && matchQ;
     }).toList();
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _tabCtrl = TabController(length: 4, vsync: this);
-    _tabCtrl.addListener(() => setState(() {}));
   }
 
   @override
@@ -152,9 +128,29 @@ class _ClientesPageState extends State<ClientesPage>
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: _filtrados.isEmpty
-                      ? _buildEmptyState()
-                      : _buildPremiumTable(context, _filtrados),
+                  child: _cargando
+                      ? const Center(child: CircularProgressIndicator(color: Color(0xFF7C3AED)))
+                      : _error != null
+                          ? Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.wifi_off_rounded, color: Colors.white30, size: 48),
+                                  const SizedBox(height: 12),
+                                  Text(_error!, style: const TextStyle(color: Colors.white38)),
+                                  const SizedBox(height: 16),
+                                  ElevatedButton.icon(
+                                    onPressed: _cargarClientes,
+                                    icon: const Icon(Icons.refresh_rounded),
+                                    label: const Text('Reintentar'),
+                                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7C3AED)),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : _filtrados.isEmpty
+                              ? _buildEmptyState()
+                              : _buildPremiumTable(context, _filtrados),
                 ),
               ),
             ],
@@ -346,6 +342,7 @@ class _ClientesPageState extends State<ClientesPage>
               showCheckboxColumn: true,
               columns: [
                 const DataColumn(label: _HeaderCell('Nombre')),
+                const DataColumn(label: _HeaderCell('Ciudad')),
                 const DataColumn(label: _HeaderCell('Teléfono')),
                 const DataColumn(label: _HeaderCell('Tipo')),
                 const DataColumn(label: _HeaderCell('Deuda')),
@@ -359,6 +356,7 @@ class _ClientesPageState extends State<ClientesPage>
                   onSelectChanged: (_) => Navigator.push(context, MaterialPageRoute(builder: (_) => HistorialComprasPage(cliente: c))),
                   cells: [
                     DataCell(Text(c.nombre, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13))),
+                    DataCell(Text(c.ciudad.isNotEmpty ? c.ciudad : '—', style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 13))),
                     DataCell(Text(c.telefono, style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 13))),
                     DataCell(_buildTypeBadge(c.tipo, colorT)),
                     DataCell(Text('Bs ${c.saldoPendiente.toStringAsFixed(2)}', 
@@ -436,6 +434,13 @@ class _ClientesPageState extends State<ClientesPage>
     final nombreCtrl = TextEditingController(text: editar?.nombre ?? '');
     final telCtrl = TextEditingController(text: editar?.telefono ?? '');
     final dirCtrl = TextEditingController(text: editar?.direccion ?? '');
+    
+    final ciudadesValidas = ['Potosí', 'La Paz', 'El Alto', 'Cochabamba', 'Oruro'];
+    String? ciudadSel;
+    if (editar != null && ciudadesValidas.contains(editar.ciudad)) {
+      ciudadSel = editar.ciudad;
+    }
+
     TipoCliente tipo = editar?.tipo ?? TipoCliente.tienda;
 
     showModalBottomSheet(
@@ -527,6 +532,38 @@ class _ClientesPageState extends State<ClientesPage>
               _Campo(ctrl: telCtrl, label: 'Teléfono',
                   icono: Icons.phone_rounded, tipo: TextInputType.phone),
               const SizedBox(height: 10),
+              
+              DropdownButtonFormField<String>(
+                value: ciudadSel,
+                dropdownColor: const Color(0xFF1A0035),
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white54),
+                decoration: InputDecoration(
+                  labelText: 'Ciudad',
+                  labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.45), fontSize: 12),
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: 0.05),
+                  prefixIcon: const Icon(Icons.location_city_rounded, color: Colors.white54, size: 18),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFF7C3AED)),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                ),
+                items: ciudadesValidas.map((c) {
+                  return DropdownMenuItem<String>(
+                    value: c,
+                    child: Text(c),
+                  );
+                }).toList(),
+                onChanged: (val) => setS(() => ciudadSel = val),
+              ),
+              const SizedBox(height: 10),
+
               _Campo(ctrl: dirCtrl, label: 'Dirección',
                   icono: Icons.location_on_rounded),
               const SizedBox(height: 20),
@@ -540,28 +577,34 @@ class _ClientesPageState extends State<ClientesPage>
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14)),
                   ),
-                  onPressed: () {
+                  onPressed: () async {
                     if (nombreCtrl.text.trim().isEmpty) return;
-                    setState(() {
+                    try {
                       if (editar == null) {
-                        _clientes.add(Cliente(
-                          id: DateTime.now()
-                              .millisecondsSinceEpoch
-                              .toString(),
+                        await _api.agregarCliente(
                           nombre: nombreCtrl.text.trim(),
                           telefono: telCtrl.text.trim(),
+                          ciudad: ciudadSel ?? '',
                           direccion: dirCtrl.text.trim(),
-                          tipo: tipo,
-                          fechaRegistro: DateTime.now(),
-                        ));
+                          tipo: tipo.name,
+                        );
                       } else {
-                        editar.nombre = nombreCtrl.text.trim();
-                        editar.telefono = telCtrl.text.trim();
-                        editar.direccion = dirCtrl.text.trim();
-                        editar.tipo = tipo;
+                        await _api.editarCliente(
+                          id: editar.id,
+                          nombre: nombreCtrl.text.trim(),
+                          telefono: telCtrl.text.trim(),
+                          ciudad: ciudadSel ?? '',
+                          direccion: dirCtrl.text.trim(),
+                          tipo: tipo.name,
+                        );
                       }
-                    });
-                    Navigator.pop(context);
+                      Navigator.pop(context);
+                      _cargarClientes(); // Recargar desde MySQL
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Error al guardar. ¿Está XAMPP activo?')),
+                      );
+                    }
                   },
                   child: Text(
                     editar == null

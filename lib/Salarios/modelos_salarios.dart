@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
+import '../services/notificaciones_service.dart';
 
 class Pago {
   final String id;
@@ -19,6 +21,7 @@ class Trabajador {
   final String nombre;
   final String cargo;
   final double salarioBase;
+  final DateTime fechaIngreso;
   final List<Pago> historialPagos;
 
   Trabajador({
@@ -26,6 +29,7 @@ class Trabajador {
     required this.nombre,
     required this.cargo,
     required this.salarioBase,
+    required this.fechaIngreso,
     List<Pago>? historialPagos,
   }) : historialPagos = historialPagos ?? [];
 }
@@ -35,30 +39,84 @@ class Trabajador {
 // ─────────────────────────────────────────────
 class SalariosService extends ChangeNotifier {
   static final SalariosService instance = SalariosService._();
-  SalariosService._();
+  SalariosService._() {
+    cargarDesdeServidor();
+  }
 
-  final List<Trabajador> _trabajadores = [
-    Trabajador(
-      id: 'T001', nombre: 'Carlos Mendoza', cargo: 'Tejedor Principal', salarioBase: 3500.0,
-      historialPagos: [
-        Pago(id: 'P001', fecha: DateTime(2026, 1, 31, 15, 30), monto: 3500.0, mesCorrespondiente: 'Enero 2026'),
-        Pago(id: 'P002', fecha: DateTime(2026, 2, 28, 10, 15), monto: 3500.0, mesCorrespondiente: 'Febrero 2026'),
-      ],
-    ),
-    Trabajador(
-      id: 'T002', nombre: 'Ana Choque', cargo: 'Costurera', salarioBase: 2800.0,
-      historialPagos: [
-        Pago(id: 'P003', fecha: DateTime(2026, 2, 28, 9, 45), monto: 2800.0, mesCorrespondiente: 'Febrero 2026'),
-      ],
-    ),
-    Trabajador(
-      id: 'T003', nombre: 'Luis Mamani', cargo: 'Urdidor', salarioBase: 3000.0,
-    ),
-  ];
+  List<Trabajador> _trabajadores = [];
+  bool isLoading = true;
 
   List<Trabajador> get trabajadores => List.unmodifiable(_trabajadores);
 
-  void registrarPago(Trabajador trabajador, double monto, String mesCorrespondiente) {
+  Future<void> refresh() => cargarDesdeServidor();
+
+  Future<void> cargarDesdeServidor() async {
+    isLoading = true;
+    notifyListeners();
+    try {
+      final List data = await ApiService.instance.listarTrabajadores();
+      
+      // Reiniciar pool de alarmas (opcional, no debería bloquear la carga)
+      try {
+        await NotificacionesService.instance.cancelarTodas();
+      } catch (e) {
+        debugPrint('Error al cancelar notificaciones: $e');
+      }
+      
+      _trabajadores = data.map((e) {
+        final List pagosData = e['historialPagos'] ?? [];
+        return Trabajador(
+          id: e['id'].toString(),
+          nombre: e['nombre'] ?? '',
+          cargo: e['cargo'] ?? '',
+          salarioBase: double.tryParse(e['salario_base'].toString()) ?? 0.0,
+          fechaIngreso: DateTime.tryParse(e['fecha_ingreso']?.toString() ?? '') ?? DateTime.now(),
+          historialPagos: pagosData.map((p) => Pago(
+            id: p['id'].toString(),
+            fecha: DateTime.tryParse(p['fecha'].toString()) ?? DateTime.now(),
+            monto: double.tryParse(p['monto'].toString()) ?? 0.0,
+            mesCorrespondiente: p['mesCorrespondiente'] ?? '',
+          )).toList(),
+        );
+      }).toList();
+
+      for (var t in _trabajadores) {
+        NotificacionesService.instance.programarRecordatorioPago(
+          idNotificacion: t.id.hashCode,
+          nombreTrabajador: t.nombre,
+          fechaIngreso: t.fechaIngreso,
+        );
+      }
+    } catch (e) {
+      debugPrint('Error cargando salarios/nómina: $e');
+    }
+    isLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> agregarTrabajador(String nombre, String cargo, double salarioBase, DateTime fechaIngreso) async {
+    // Optimistic local update
+    final t = Trabajador(
+      id: 'T${DateTime.now().millisecondsSinceEpoch}',
+      nombre: nombre, cargo: cargo, salarioBase: salarioBase,
+      fechaIngreso: fechaIngreso,
+    );
+    _trabajadores.add(t);
+    notifyListeners();
+
+    try {
+      await ApiService.instance.agregarTrabajador(
+        nombre: nombre, cargo: cargo, salarioBase: salarioBase,
+        fechaIngreso: fechaIngreso.toIso8601String().split('T')[0],
+      );
+      await cargarDesdeServidor();
+    } catch(e) {
+      debugPrint('Error agregando trabajador: $e');
+    }
+  }
+
+  Future<void> registrarPago(Trabajador trabajador, double monto, String mesCorrespondiente) async {
+    // Optimistic
     trabajador.historialPagos.insert(0, Pago(
       id: 'P${DateTime.now().millisecondsSinceEpoch}',
       fecha: DateTime.now(),
@@ -66,5 +124,16 @@ class SalariosService extends ChangeNotifier {
       mesCorrespondiente: mesCorrespondiente,
     ));
     notifyListeners();
+
+    try {
+      await ApiService.instance.registrarPago(
+        trabajadorId: int.parse(trabajador.id),
+        monto: monto,
+        mesCorrespondiente: mesCorrespondiente,
+      );
+      await cargarDesdeServidor();
+    } catch(e) {
+      debugPrint('Error registrando pago: $e');
+    }
   }
 }

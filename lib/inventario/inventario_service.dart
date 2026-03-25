@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../services/app_service.dart';
 import '../produccion/produccion.dart';
+import '../services/api_service.dart';
 
 class InventarioService extends ChangeNotifier {
   InventarioService._() {
@@ -8,17 +9,44 @@ class InventarioService extends ChangeNotifier {
     // para recalcular automáticamente el stock.
     AppService.instance.addListener(_onDependenciaCambio);
     ProduccionService.instance.addListener(_onDependenciaCambio);
+    cargarInventario();
   }
 
   static final InventarioService instance = InventarioService._();
 
   // Se llama cada vez que hay una nueva venta o producción registrada
   void _onDependenciaCambio() {
-    notifyListeners();
+    cargarInventario();
   }
 
   // ── Lógica Central: Matemáticas del Inventario ──────────────────────────
   
+  Map<String, int> _stockDesdeDB = {};
+  bool cargando = false;
+
+  Future<void> cargarInventario() async {
+    cargando = true;
+    notifyListeners();
+    try {
+      final List data = await ApiService.instance.listarInventario();
+      _stockDesdeDB.clear();
+      for (var item in data) {
+        final String col = item['color'] ?? '';
+        final int cant = (item['cantidad'] as num).toInt();
+        if (col.isNotEmpty) {
+          _stockDesdeDB[col] = cant;
+        }
+      }
+    } catch (e) {
+      debugPrint('Error cargando inventario: $e');
+    }
+    cargando = false;
+    notifyListeners();
+  }
+
+  // Devuelve el stock actual desde la base de datos
+  Map<String, int> get inventarioActual => Map.unmodifiable(_stockDesdeDB);
+
   // Limpia el nombre del color para que sea "color entero" (ej: "Rojo/Negro" -> "Rojo")
   String normalizarColor(String color) {
     if (color.contains('/')) {
@@ -27,46 +55,33 @@ class InventarioService extends ChangeNotifier {
     return color.trim();
   }
 
-  // Devuelve el stock actual (Producido - Vendido) de TODO
-  Map<String, int> get inventarioActual {
-    Map<String, int> stock = {};
-
-    // 1. Obtener todas las producciones (Sumar)
-    for (var m in ProduccionService.instance.maquinas) {
-      for (var semana in m.historialProduccion) {
-        semana.produccionPorColor.forEach((rawColor, cant) {
-          final color = normalizarColor(rawColor);
-          stock[color] = (stock[color] ?? 0) + cant.toInt();
-        });
-      }
-    }
-
-    // 2. Obtener todas las ventas y despachos (Restar)
-    for (var venta in AppService.instance.ventas) {
-      if (venta.color.isNotEmpty && venta.color.toLowerCase() != 'sin color') {
-        final color = normalizarColor(venta.color);
-        stock[color] = (stock[color] ?? 0) - venta.cantidad.toInt();
-      }
-    }
-
-    // 3. Inyectar datos de prueba para el Asistente (DEBUG/DEMO)
-    // Colores enteros como pidió el usuario
-    stock['Azul'] = (stock['Azul'] ?? 0) + 120;
-    stock['Rojo'] = (stock['Rojo'] ?? 0) + 0; // Agotado
-    stock['Verde'] = (stock['Verde'] ?? 0) + 45;
-    stock['Negro'] = (stock['Negro'] ?? 0) + 0; // Agotado
-
-    return stock;
-  }
-
   // Stock de un color específico
   int stockDe(String color) {
     return inventarioActual[color] ?? 0;
   }
 
   // Utilidad para extraer todos los colores que han existido históricamente
+  // (Incluso si no hay stock actual en la base de datos)
   List<String> get todosLosColoresConocidos {
-    return inventarioActual.keys.toList()..sort();
+    final Set<String> colores = {..._stockDesdeDB.keys};
+    
+    // Fallback: Sumar colores de Producción
+    for (var m in ProduccionService.instance.maquinas) {
+      for (var s in m.historialProduccion) {
+        for (var c in s.produccionPorColor.keys) {
+          colores.add(normalizarColor(c));
+        }
+      }
+    }
+    
+    // Fallback: Sumar colores de Ventas
+    for (var v in AppService.instance.ventas) {
+      if (v.color.isNotEmpty) {
+        colores.add(normalizarColor(v.color));
+      }
+    }
+    
+    return colores.toList()..sort();
   }
 
   // Nueva utilidad: Devuelve una cadena con cortes de 20, cortes de 10 y chullas

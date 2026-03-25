@@ -12,14 +12,19 @@ import 'dashboard/dashboard.dart';
 import 'analitica/analitica_page.dart';
 import 'inventario/inventario_page.dart';
 import 'urdido/urdido_page.dart';
+import 'services/app_service.dart';
 
 import 'package:intl/date_symbol_data_local.dart';
+import 'services/notificaciones_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   // Inicialización de Idioma para fechas
   await initializeDateFormatting('es', null);
+  
+  await NotificacionesService.instance.init();
+  await NotificacionesService.instance.requestPermissions();
 
   const supabaseUrlEnv = String.fromEnvironment('SUPABASE_URL');
   const supabaseAnonKeyEnv = String.fromEnvironment('SUPABASE_ANON_KEY');
@@ -98,7 +103,7 @@ class MyApp extends StatelessWidget {
         '/produccion':  (_) => const ProduccionHubPage(),
         '/pagos':       (_) => const PagosPage(),
         '/compras':     (_) => const ComprasPage(),
-        '/dashboard':   (_) => const DashboardPage(),
+        '/dashboard':   (_) => const EstadisticasPage(),
         '/analitica':   (_) => const AnaliticaPage(),
         '/inventario':  (_) => const InventarioPage(),
         '/urdido':      (_) => const UrdidoPage(),
@@ -173,8 +178,8 @@ const List<_Modulo> _modulos = [
     textura: 'assets/images/aguayo_naranja.png',
   ),
   _Modulo(
-    titulo: 'Dashboard',
-    icono: Icons.dashboard_rounded,
+    titulo: 'Estadísticas',
+    icono: Icons.bar_chart_rounded,
     gradiente: [Color(0xFF06B6D4), Color(0xFF22D3EE)],
     ruta: '/dashboard',
     textura: 'assets/images/aguayo_azul.png',
@@ -955,15 +960,27 @@ class _ModuloCardState extends State<_ModuloCard>
 // ─────────────────────────────────────────────
 //  Hub de Cobranza — 3 sub-módulos
 // ─────────────────────────────────────────────
-class CobranzaHubPage extends StatelessWidget {
+class CobranzaHubPage extends StatefulWidget {
   const CobranzaHubPage({super.key});
 
+  @override
+  State<CobranzaHubPage> createState() => _CobranzaHubPageState();
+}
+
+class _CobranzaHubPageState extends State<CobranzaHubPage> {
   static const _kAzul       = Color(0xFF1565C0);
   static const _kAzulClaro  = Color(0xFF42A5F5);
   static const _kVerde      = Color(0xFF00C853);
   static const _kVerdeClaro = Color(0xFF69F0AE);
   static const _kFondo      = Color(0xFF0A1628);
   static const _kFondo2     = Color(0xFF0D2145);
+
+  @override
+  void initState() {
+    super.initState();
+    // Cargar datos automáticamente al entrar a Cobranza
+    AppService.instance.cargarVentas();
+  }
 
   @override
   Widget build(BuildContext context) {

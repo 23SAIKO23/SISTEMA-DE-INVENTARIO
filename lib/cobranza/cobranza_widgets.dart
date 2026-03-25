@@ -1,4 +1,6 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:signature/signature.dart';
 import '../ventas/modelos_venta.dart';
 
 // ── Paleta compartida ─────────────────────────
@@ -144,7 +146,18 @@ class CobResumenVenta extends StatelessWidget {
       border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
     ),
     child: Column(children: [
-      CobFilaInfo('Total', 'Bs ${v.total.toStringAsFixed(2)}', Colors.white70),
+      CobFilaInfo('Producto', v.tipo.name.toUpperCase(), Colors.white70),
+      const SizedBox(height: 4),
+      CobFilaInfo('Cantidad', '${v.cantidad.toStringAsFixed(0)} aguayos', Colors.white70),
+      const SizedBox(height: 4),
+      CobFilaInfo('Precio Unit.', 'Bs ${v.precioUnit.toStringAsFixed(2)}', Colors.white70),
+      
+      const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: Divider(color: Colors.white24, height: 1),
+      ),
+
+      CobFilaInfo('Total (Venta)', 'Bs ${v.total.toStringAsFixed(2)}', Colors.white),
       const SizedBox(height: 4),
       CobFilaInfo('Cobrado',
           'Bs ${v.montoPagado.toStringAsFixed(2)}', kCobVerdeClaro),
@@ -269,4 +282,99 @@ class CobBadgeFecha extends StatelessWidget {
     child: Text(texto, style: TextStyle(color: color, fontSize: 9,
         fontWeight: FontWeight.w700)),
   );
+}
+
+// ─────────────────────────────────────────────
+//  Cuadro de Firma Digital
+// ─────────────────────────────────────────────
+class CobDialogFirma extends StatefulWidget {
+  const CobDialogFirma({super.key});
+
+  @override
+  State<CobDialogFirma> createState() => _CobDialogFirmaState();
+}
+
+class _CobDialogFirmaState extends State<CobDialogFirma> {
+  final SignatureController _controller = SignatureController(
+    penStrokeWidth: 3.5,
+    penColor: const Color(0xFF0A1628),
+    exportBackgroundColor: Colors.transparent,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: kCobFondo2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: kCobAzulClaro.withValues(alpha: 0.40)),
+      ),
+      title: Row(children: [
+        const CobIconoDialog(icono: Icons.draw_rounded, color: kCobVerde),
+        const SizedBox(width: 10),
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Firma del Cliente',
+              style: TextStyle(color: Colors.white, fontSize: 14,
+                  fontWeight: FontWeight.w700)),
+          Text('Dibuje la firma de conformidad',
+              style: TextStyle(
+                  color: kCobAzulClaro.withValues(alpha: 0.80),
+                  fontSize: 11)),
+        ]),
+      ]),
+      content: Container(
+        width: 400,
+        height: 250,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white30),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Signature(
+          controller: _controller,
+          backgroundColor: Colors.white,
+        ),
+      ),
+      actions: [
+        TextButton.icon(
+          onPressed: () => _controller.clear(),
+          icon: const Icon(Icons.delete_outline_rounded, size: 16),
+          label: const Text('Limpiar'),
+          style: TextButton.styleFrom(
+            foregroundColor: kCobRojo.withValues(alpha: 0.8),
+          ),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, null),
+          child: Text('Cancelar',
+              style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.40))),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: kCobVerde, foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10)),
+          ),
+          onPressed: () async {
+            if (_controller.isNotEmpty) {
+              final Uint8List? data = await _controller.toPngBytes();
+              if (context.mounted) Navigator.pop(context, data);
+            } else {
+              Navigator.pop(context, null);
+            }
+          },
+          child: const Text('Guardar Firma',
+              style: TextStyle(fontWeight: FontWeight.w700)),
+        ),
+      ],
+    );
+  }
 }

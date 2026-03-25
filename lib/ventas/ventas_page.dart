@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'modelos_venta.dart';
 import '../services/app_service.dart';
+import '../services/api_service.dart';
+import '../inventario/inventario_service.dart';
 
 export 'modelos_venta.dart';
 
@@ -30,6 +32,7 @@ class _VentasPageState extends State<VentasPage> {
   void initState() {
     super.initState();
     _svc.addListener(_onUpdate);
+    _svc.cargarVentas();
   }
 
   @override
@@ -267,7 +270,7 @@ class _VentasPageState extends State<VentasPage> {
                       onSelectChanged:
                           canAbonar ? (_) => _abonar(context, v) : null,
                       cells: [
-                        DataCell(Text(v.id, style: cellStyle)),
+                        DataCell(Text(v.id.toString(), style: cellStyle)),
                         DataCell(Text(v.cliente, style: cellStyle)),
                         DataCell(Text(_labelTipo(v.tipo), style: cellStyle)),
                         DataCell(Text(v.color.isEmpty ? '—' : v.color,
@@ -487,15 +490,17 @@ class _VentasPageState extends State<VentasPage> {
     );
   }
 
-  // ── Formulario nuevo pedido ───────────────
-  void _formulario(BuildContext ctx) {
-    final clienteCtrl = TextEditingController();
-    final colorCtrl   = TextEditingController();
+    void _formulario(BuildContext ctx) {
+    String? clienteSel;
+    String? colorSel;
     final cantCtrl    = TextEditingController();
     final destCtrl    = TextEditingController();
     final precioCtrl  = TextEditingController();
     TipoProducto tipo = TipoProducto.simple;
     ModalidadPago pago = ModalidadPago.contado;
+
+    final invSvc = InventarioService.instance;
+    final coloresDisponibles = invSvc.todosLosColoresConocidos;
 
     showModalBottomSheet(
       context: ctx,
@@ -585,12 +590,94 @@ class _VentasPageState extends State<VentasPage> {
                   }).toList()),
                   const SizedBox(height: 12),
 
-                  _Input(ctrl: clienteCtrl, label: 'Cliente',
-                      icono: Icons.person_rounded),
+                  FutureBuilder<List<dynamic>>(
+                    future: ApiService.instance.listarClientes(),
+                    builder: (ctx, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return Container(
+                          height: 52,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.05),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                          ),
+                          child: const Center(
+                            child: SizedBox(
+                              width: 20, height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: _kVerde),
+                            ),
+                          ),
+                        );
+                      }
+                      if (snapshot.hasError) {
+                        return const Text('Error al cargar clientes', style: TextStyle(color: Colors.red));
+                      }
+                      final clientes = snapshot.data ?? [];
+                      return DropdownButtonFormField<String>(
+                        value: clienteSel,
+                        dropdownColor: const Color(0xFF0D2145),
+                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white54),
+                        decoration: InputDecoration(
+                          labelText: 'Cliente',
+                          labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.45), fontSize: 12),
+                          filled: true,
+                          fillColor: Colors.white.withValues(alpha: 0.05),
+                          prefixIcon: const Icon(Icons.person_rounded, color: Colors.white54, size: 18),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: _kVerde),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        ),
+                        items: clientes.map((c) {
+                          return DropdownMenuItem<String>(
+                            value: c['nombre'].toString(),
+                            child: Text(c['nombre'].toString()),
+                          );
+                        }).toList(),
+                        onChanged: (val) => setS(() => clienteSel = val),
+                      );
+                    },
+                  ),
                   const SizedBox(height: 8),
-                  Row(children: [
-                    Expanded(child: _Input(ctrl: colorCtrl, label: 'Color',
-                        icono: Icons.palette_rounded)),
+                   Row(children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: colorSel,
+                        dropdownColor: const Color(0xFF0D2145),
+                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white54),
+                        decoration: InputDecoration(
+                          labelText: 'Color',
+                          labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.45), fontSize: 12),
+                          prefixIcon: const Icon(Icons.palette_rounded, color: _kAzulClaro, size: 17),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.14)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: _kAzulClaro, width: 1.5),
+                          ),
+                          filled: true,
+                          fillColor: Colors.white.withValues(alpha: 0.04),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        ),
+                        items: coloresDisponibles.map((c) {
+                          final s = invSvc.stockDe(c);
+                          return DropdownMenuItem<String>(
+                            value: c,
+                            child: Text('$c ($s disponibles)'),
+                          );
+                        }).toList(),
+                        onChanged: (val) => setS(() => colorSel = val),
+                      ),
+                    ),
                     const SizedBox(width: 8),
                     Expanded(child: _Input(
                         ctrl: cantCtrl,
@@ -665,16 +752,33 @@ class _VentasPageState extends State<VentasPage> {
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14)),
                       ),
-                      onPressed: () {
-                        if (clienteCtrl.text.trim().isEmpty) return;
+                       onPressed: () {
+                        if (clienteSel == null) {
+                          ScaffoldMessenger.of(bCtx).showSnackBar(const SnackBar(content: Text('Por favor selecciona un cliente')));
+                          return;
+                        }
+                        if (colorSel == null) {
+                          ScaffoldMessenger.of(bCtx).showSnackBar(const SnackBar(content: Text('Por favor selecciona un color')));
+                          return;
+                        }
+
                         final cant = double.tryParse(cantCtrl.text) ?? 1;
+                        final stockDisponible = invSvc.stockDe(colorSel!);
+
+                        if (cant > stockDisponible) {
+                          ScaffoldMessenger.of(bCtx).showSnackBar(SnackBar(
+                            content: Text('Stock insuficiente para "$colorSel". Solo hay $stockDisponible disponibles.'),
+                            backgroundColor: const Color(0xFFEF5350),
+                          ));
+                          return;
+                        }
+
                         final precio = double.tryParse(precioCtrl.text) ?? 0;
-                        // ← agrega venta al AppService (se sincroniza con cobranza)
                         _svc.agregarVenta(Venta(
-                          id: _svc.nuevoId(),
-                          cliente: clienteCtrl.text.trim(),
+                          id: 0,
+                          cliente: clienteSel!,
                           tipo: tipo,
-                          color: colorCtrl.text.trim(),
+                          color: colorSel!,
                           cantidad: cant,
                           destino: destCtrl.text.trim(),
                           precioUnit: precio,

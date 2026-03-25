@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'modelos_salarios.dart';
 import 'historial/historial_pagos.dart'; // Import nuevo
+import '../services/notificaciones_service.dart';
 
 // ── Paleta y Constantes Premium ────────────────
 const _kVerdeAcento = Color(0xFF14B8A6); // Teal 500
@@ -109,35 +110,99 @@ class _PagosPageState extends State<PagosPage> with SingleTickerProviderStateMix
                 _buildHeroResumen(),
                 _buildBuscador(),
                 Expanded(
-                  child: filtrados.isEmpty
+                  child: _srv.isLoading 
+                      ? const Center(child: CircularProgressIndicator(color: _kVerdeAcento))
+                      : filtrados.isEmpty
                       ? _buildEmptyState()
-                      : ListView.builder(
-                          padding: const EdgeInsets.only(top: 8, bottom: 120, left: 16, right: 16),
-                          itemCount: filtrados.length,
-                          itemBuilder: (context, index) {
-                            return SlideTransition(
-                              position: Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero).animate(
-                                CurvedAnimation(parent: _animCtrl, curve: Interval(index * 0.1, 1.0, curve: Curves.easeOutCubic))
-                              ),
-                              child: FadeTransition(
-                                opacity: Tween<double>(begin: 0, end: 1).animate(
-                                  CurvedAnimation(parent: _animCtrl, curve: Interval(index * 0.1, 1.0, curve: Curves.easeOut))
+                      : SingleChildScrollView(
+                          padding: const EdgeInsets.only(bottom: 120),
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Container(
+                                  color: Colors.white.withValues(alpha: 0.02),
+                                  child: DataTable(
+                                    headingRowColor: WidgetStateProperty.all(Colors.white.withValues(alpha: 0.08)),
+                                    dataRowColor: WidgetStateProperty.resolveWith<Color>((Set<WidgetState> states) {
+                                      return Colors.transparent;
+                                    }),
+                                    dividerThickness: 0.5,
+                                    columnSpacing: 24,
+                                    headingTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.5),
+                                    columns: const [
+                                      DataColumn(label: Text('N°')),
+                                      DataColumn(label: Text('NOMBRE COMPLETO')),
+                                      DataColumn(label: Text('CARGO')),
+                                      DataColumn(label: Text('INGRESO O PAGO')),
+                                      DataColumn(label: Text('SALARIO BASE')),
+                                      DataColumn(label: Text('ACCIONES')),
+                                    ],
+                                    rows: List<DataRow>.generate(filtrados.length, (index) {
+                                      final t = filtrados[index];
+                                      return DataRow(
+                                        color: WidgetStateProperty.all(index.isEven ? Colors.transparent : Colors.white.withValues(alpha: 0.03)),
+                                        cells: [
+                                          DataCell(Text('${index + 1}', style: const TextStyle(color: Colors.white70))),
+                                          DataCell(Text(t.nombre, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600))),
+                                          DataCell(Text(t.cargo, style: const TextStyle(color: _kVerdeClaro, fontWeight: FontWeight.bold, fontSize: 12))),
+                                          DataCell(Text('${t.fechaIngreso.day}/${t.fechaIngreso.month}/${t.fechaIngreso.year} (Día ${t.fechaIngreso.day})', style: const TextStyle(color: Colors.white70))),
+                                          DataCell(Text(_formatoMoneda.format(t.salarioBase), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900))),
+                                          DataCell(Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              IconButton(
+                                                icon: const Icon(Icons.payment_rounded, color: _kVerdeAcento, size: 20),
+                                                tooltip: 'Registrar Pago',
+                                                splashRadius: 20,
+                                                onPressed: () => _abrirDialRegistrarPago(context, t),
+                                              ),
+                                              IconButton(
+                                                icon: const Icon(Icons.history_rounded, color: Colors.white70, size: 20),
+                                                tooltip: 'Ver Historial',
+                                                splashRadius: 20,
+                                                onPressed: () => _abrirDialHistorial(context, t),
+                                              ),
+                                              IconButton(
+                                                icon: const Icon(Icons.notifications_active_rounded, color: Colors.amberAccent, size: 20),
+                                                tooltip: 'Probar Notificación Ahora',
+                                                splashRadius: 20,
+                                                onPressed: () {
+                                                   NotificacionesService.instance.programarRecordatorioPago(
+                                                      idNotificacion: t.id.hashCode + 999,
+                                                      nombreTrabajador: t.nombre,
+                                                      fechaIngreso: DateTime.now().add(const Duration(days: 1)),
+                                                   );
+                                                   ScaffoldMessenger.of(context).showSnackBar(
+                                                      const SnackBar(content: Text('Notificación de prueba programada para mañana (ver consola)')),
+                                                   );
+                                                },
+                                              ),
+                                            ],
+                                          )),
+                                        ]
+                                      );
+                                    }),
+                                  ),
                                 ),
-                                child: _TarjetaTrabajador(
-                                  trabajador: filtrados[index],
-                                  formatoMoneda: _formatoMoneda,
-                                  onRegistrarPago: (trabajador) => _abrirDialRegistrarPago(context, trabajador),
-                                  onVerHistorial: (trabajador) => _abrirDialHistorial(context, trabajador),
-                                ),
                               ),
-                            );
-                          },
+                            ),
+                          ),
                         ),
                 ),
               ],
             ),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: _kVerdeAcento,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.person_add_alt_1_rounded),
+        label: const Text('Nuevo Trabajador', style: TextStyle(fontWeight: FontWeight.w800)),
+        onPressed: () => _abrirDialNuevoTrabajador(context),
       ),
     );
   }
@@ -301,6 +366,138 @@ class _PagosPageState extends State<PagosPage> with SingleTickerProviderStateMix
           Text('No se encontraron empleados', style: TextStyle(
               color: _kTextoSecundario, fontSize: 15)),
         ],
+      ),
+    );
+  }
+
+  void _abrirDialNuevoTrabajador(BuildContext ctx) {
+    final nombreCtrl = TextEditingController();
+    final cargoCtrl = TextEditingController();
+    final salarioCtrl = TextEditingController();
+    DateTime fechaIngreso = DateTime.now();
+
+    showModalBottomSheet(
+      context: ctx,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => StatefulBuilder(
+        builder: (ctxModal, setStateModal) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: _kCardBg.withValues(alpha: 0.95),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 30, offset: const Offset(0, -5)),
+              ]
+            ),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Container(width: 40, height: 5, margin: const EdgeInsets.only(bottom: 24),
+                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(10))),
+              
+              Row(
+                children: [
+                  Container(
+                    width: 50, height: 50,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [_kVerdeClaro, _kVerdeAcento]),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [BoxShadow(color: _kVerdeAcento.withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 4))]
+                    ),
+                    child: const Icon(Icons.person_add_rounded, color: Colors.white, size: 26),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Nuevo Personal',
+                            style: TextStyle(color: Colors.white, fontSize: 22,
+                                fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+                        const Text('Registrar Nómina',
+                            style: TextStyle(color: _kVerdeClaro,
+                                fontSize: 14, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 28),
+              
+              _CampoInputGlass(ctrl: nombreCtrl, label: 'Nombre Completo',
+                  icono: Icons.badge_rounded),
+              const SizedBox(height: 16),
+              _CampoInputGlass(ctrl: cargoCtrl, label: 'Cargo (p.ej. Costurera)',
+                  icono: Icons.work_outline_rounded),
+              const SizedBox(height: 16),
+              _CampoInputGlass(ctrl: salarioCtrl, label: 'Salario Base Mensual (Bs)',
+                  icono: Icons.monetization_on_rounded, numerico: true),
+              const SizedBox(height: 16),
+              
+              InkWell(
+                onTap: () async {
+                  final seleccion = await showDatePicker(
+                    context: ctx,
+                    initialDate: fechaIngreso,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime(2030),
+                  );
+                  if (seleccion != null) {
+                    setStateModal(() => fechaIngreso = seleccion);
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.calendar_month_rounded, color: _kVerdeAcento, size: 22),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Fecha de Ingreso / Contrato', style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 12)),
+                          Text('${fechaIngreso.day}/${fechaIngreso.month}/${fechaIngreso.year}', style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 32),
+              
+              SizedBox(width: double.infinity, child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _kVerdeAcento,
+                  foregroundColor: Colors.white,
+                  elevation: 10,
+                  shadowColor: _kVerdeAcento.withValues(alpha:  0.5),
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                onPressed: () {
+                  final s = double.tryParse(salarioCtrl.text);
+                  if (nombreCtrl.text.trim().isNotEmpty && s != null) {
+                    _srv.agregarTrabajador(nombreCtrl.text.trim(), cargoCtrl.text.trim(), s, fechaIngreso);
+                    Navigator.pop(ctx);
+                  }
+                },
+                child: const Text('Registrar Empleado', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, letterSpacing: 0.5)),
+              )),
+              const SizedBox(height: 10),
+            ]),
+          ),
+        ),
+      ),
       ),
     );
   }
@@ -551,184 +748,6 @@ class _PagosPageState extends State<PagosPage> with SingleTickerProviderStateMix
 }
 
 // ── Componentes de la UI ─────────────────────────
-
-class _TarjetaTrabajador extends StatelessWidget {
-  final Trabajador trabajador;
-  final NumberFormat formatoMoneda;
-  final Function(Trabajador) onRegistrarPago;
-  final Function(Trabajador) onVerHistorial;
-
-  const _TarjetaTrabajador({
-    required this.trabajador,
-    required this.formatoMoneda,
-    required this.onRegistrarPago,
-    required this.onVerHistorial,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    // Determinar si ya se le pagó este mes
-    final mesesActual = '${_obtenerMesActual(DateTime.now().month)} ${DateTime.now().year}';
-    final pagoEsteMes = trabajador.historialPagos.any((p) => p.mesCorrespondiente == mesesActual);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: _kCardBg,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.25),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
-          )
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: Stack(
-          children: [
-            // Brillitos sutiles de fondo
-            Positioned(
-              left: -20, top: -20,
-              child: Container(
-                width: 100, height: 100,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(colors: [
-                    pagoEsteMes ? _kVerdeAcento.withValues(alpha: 0.1) : Colors.amber.withValues(alpha: 0.05),
-                    Colors.transparent
-                  ]),
-                ),
-              ),
-            ),
-            Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Avatar
-                      Container(
-                        width: 56, height: 56,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF334155), Color(0xFF1E293B)],
-                            begin: Alignment.topLeft, end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-                        ),
-                        child: Center(
-                          child: Text(trabajador.nombre.substring(0, 1).toUpperCase(), 
-                            style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900)),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(trabajador.nombre, style: const TextStyle(
-                                color: Colors.white, fontWeight: FontWeight.w800, fontSize: 17, letterSpacing: -0.3)),
-                            const SizedBox(height: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.06),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(trabajador.cargo.toUpperCase(), style: const TextStyle(
-                                  color: _kVerdeClaro, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.8)),
-                            ),
-                          ],
-                        ),
-                      ),
-                      // Estado e Importe
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: pagoEsteMes ? _kVerdeAcento.withValues(alpha: 0.2) : Colors.amber.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: pagoEsteMes ? _kVerdeAcento.withValues(alpha: 0.3) : Colors.amber.withValues(alpha: 0.3)),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(pagoEsteMes ? Icons.check_circle_rounded : Icons.pending_rounded, 
-                                  size: 12, color: pagoEsteMes ? _kVerdeClaro : Colors.amber),
-                                const SizedBox(width: 4),
-                                Text(pagoEsteMes ? 'Pagado' : 'Pendiente', style: TextStyle(
-                                    color: pagoEsteMes ? _kVerdeClaro : Colors.amber, fontSize: 10, fontWeight: FontWeight.w800)),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Text('Salario Base', style: TextStyle(color: _kTextoSecundario, fontSize: 10, fontWeight: FontWeight.w600)),
-                          Text(formatoMoneda.format(trabajador.salarioBase), style: const TextStyle(
-                              color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: -0.5)),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                
-                // Barra de botones modernos
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.15),
-                    border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.03))),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextButton.icon(
-                          onPressed: () => onVerHistorial(trabajador),
-                          icon: const Icon(Icons.history_rounded, size: 18),
-                          label: const Text('Ver Historial', style: TextStyle(fontWeight: FontWeight.w700)),
-                          style: TextButton.styleFrom(
-                            foregroundColor: _kTextoSecundario,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () => onRegistrarPago(trabajador),
-                          icon: const Icon(Icons.add_card_rounded, size: 18),
-                          label: const Text('Registrar', style: TextStyle(fontWeight: FontWeight.w800)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _kVerdeAcento.withValues(alpha: 0.2), // botón ghost
-                            foregroundColor: _kVerdeClaro,
-                            elevation: 0,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: _kVerdeAcento.withValues(alpha: 0.3))),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _obtenerMesActual(int month) {
-    final meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-    return meses[month - 1];
-  }
-}
 
 class _CampoInputGlass extends StatelessWidget {
   final TextEditingController ctrl;

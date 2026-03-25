@@ -1,17 +1,26 @@
 import 'dart:io';
 import 'dart:ui';
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:signature/signature.dart';
 import 'modelos_compra.dart';
+import '../services/api_service.dart';
+import '../cobranza/cobranza_widgets.dart';
 
-const _kAzulOscuro = Color(0xFF0D1424);
-const _kNaranjaAcento = Color(0xFFF97316); // Orange 500
-const _kNaranjaClaro = Color(0xFFFB923C);  // Orange 400
-const _kCardBg = Color(0xFF172036);
+// ── Paleta BI Premium "Compras" ────────────────
+const _kAzulOscuro = Color(0xFF060B18);
+const _kFondo2 = Color(0xFF0D1424);
+const _kNaranjaAcento = Color(0xFFF97316); 
+const _kCyan = Color(0xFF22D3EE);
+const _kPurple = Color(0xFF8B5CF6);
+const _kCardBg = Color(0xFF111827);
 const _kTextoSecundario = Color(0xFF94A3B8);
-const _kRojoDeuda = Color(0xFFEF4444);     // Red 500
-const _kVerdePago = Color(0xFF10B981);     // Emerald 500
+const _kRojoDeuda = Color(0xFFF43F5E);     
+const _kVerdePago = Color(0xFF10B981);     
 
 class ComprasPage extends StatefulWidget {
   const ComprasPage({super.key});
@@ -31,9 +40,14 @@ class _ComprasPageState extends State<ComprasPage> with SingleTickerProviderStat
   @override
   void initState() {
     super.initState();
-    _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
+    _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000));
     _animCtrl.forward();
     _srv.addListener(_onServiceUpdate);
+    
+    // Carga inicial
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _srv.cargarProveedores();
+    });
   }
 
   @override
@@ -66,27 +80,25 @@ class _ComprasPageState extends State<ComprasPage> with SingleTickerProviderStat
       backgroundColor: _kAzulOscuro,
       body: Stack(
         children: [
-          // Fondos Decorativos
-          Positioned(
-            top: -100, right: -50,
+          // Fondo gradiente sutil
+          Positioned.fill(
             child: Container(
-              width: 300, height: 300,
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
                 gradient: RadialGradient(
-                  colors: [_kNaranjaAcento.withValues(alpha: 0.15), Colors.transparent],
+                  center: const Alignment(0.7, -0.6),
+                  radius: 1.2,
+                  colors: [_kPurple.withValues(alpha: 0.12), Colors.transparent],
                 ),
               ),
             ),
           ),
-          Positioned(
-            bottom: -50, left: -100,
+          Positioned.fill(
             child: Container(
-              width: 400, height: 400,
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
                 gradient: RadialGradient(
-                  colors: [_kNaranjaClaro.withValues(alpha: 0.1), Colors.transparent],
+                  center: const Alignment(-0.8, 0.7),
+                  radius: 1.0,
+                  colors: [_kNaranjaAcento.withValues(alpha: 0.08), Colors.transparent],
                 ),
               ),
             ),
@@ -99,39 +111,36 @@ class _ComprasPageState extends State<ComprasPage> with SingleTickerProviderStat
                 _buildHeroResumen(),
                 _buildBuscador(),
                 Expanded(
-                  child: filtrados.isEmpty
-                      ? _buildEmptyState()
-                      : ListView.builder(
-                          padding: const EdgeInsets.only(top: 8, bottom: 120, left: 16, right: 16),
-                          itemCount: filtrados.length,
-                          itemBuilder: (context, index) {
-                            return SlideTransition(
-                              position: Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero).animate(
-                                CurvedAnimation(parent: _animCtrl, curve: Interval(index * 0.1, 1.0, curve: Curves.easeOutCubic))
-                              ),
-                              child: FadeTransition(
-                                opacity: Tween<double>(begin: 0, end: 1).animate(
-                                  CurvedAnimation(parent: _animCtrl, curve: Interval(index * 0.1, 1.0, curve: Curves.easeOut))
-                                ),
-                                child: _ProveedorCard(
+                  child: _srv.cargando && filtrados.isEmpty
+                      ? const Center(child: CircularProgressIndicator(color: _kNaranjaAcento))
+                      : filtrados.isEmpty
+                          ? _buildEmptyState()
+                          : ListView.builder(
+                              physics: const BouncingScrollPhysics(),
+                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+                              itemCount: filtrados.length,
+                              itemBuilder: (context, index) {
+                                return _ProveedorRowPremium(
                                   proveedor: filtrados[index],
                                   formatoMoneda: _formatoMoneda,
-                                  onVerDetalle: (prov) => _abrirDialHistorial(context, prov),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
+                                  index: index,
+                                  anim: _animCtrl,
+                                  onTap: () => _abrirDialHistorial(context, filtrados[index]),
+                                );
+                              },
+                            ),
                 ),
               ],
             ),
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _abrirDialNuevoProveedor(context),
         backgroundColor: _kNaranjaAcento,
-        child: const Icon(Icons.person_add_alt_1_rounded, color: Colors.white),
+        icon: const Icon(Icons.person_add_alt_1_rounded, color: Colors.white),
+        label: const Text('NUEVO PROVEEDOR', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 1)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
     );
   }
@@ -145,9 +154,16 @@ class _ComprasPageState extends State<ComprasPage> with SingleTickerProviderStat
             icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
             onPressed: () => Navigator.pop(context),
           ),
-          const Text('Compras y Proveedores', style: TextStyle(
-              color: Colors.white, fontSize: 20,
-              fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+          const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('COMPRAS', style: TextStyle(
+                  color: Colors.white, fontSize: 18,
+                  fontWeight: FontWeight.w900, letterSpacing: 2)),
+              Text('Libro Diario de Proveedores', style: TextStyle(
+                  color: _kTextoSecundario, fontSize: 10, letterSpacing: 0.5)),
+            ],
+          ),
         ],
       ),
     );
@@ -156,36 +172,39 @@ class _ComprasPageState extends State<ComprasPage> with SingleTickerProviderStat
   Widget _buildHeroResumen() {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [_kNaranjaAcento, Color(0xFFC2410C)], // Orange 500 to Orange 700
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: _kCardBg,
         borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
         boxShadow: [
-          BoxShadow(
-            color: _kNaranjaAcento.withValues(alpha: 0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.4), blurRadius: 30, offset: const Offset(0, 15))
         ],
       ),
       child: Stack(
         children: [
-          Positioned(
-            right: -20, top: -20,
-            child: Icon(Icons.local_shipping_rounded, size: 120, color: Colors.white.withValues(alpha: 0.1)),
-          ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('DEUDA TOTAL A PROVEEDORES', style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.8), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-              const SizedBox(height: 6),
-              Text(_formatoMoneda.format(_deudaTotalGlobal), style: const TextStyle(
-                  color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: -1)),
+              Row(
+                children: [
+                  Container(
+                    width: 4, height: 16,
+                    decoration: BoxDecoration(color: _kNaranjaAcento, borderRadius: BorderRadius.circular(2)),
+                  ),
+                  const SizedBox(width: 8),
+                  Text('DEUDA TOTAL CONSOLIDADA', style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.45), fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.5)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(_formatoMoneda.format(_deudaTotalGlobal), style: const TextStyle(
+                      color: Colors.white, fontSize: 36, fontWeight: FontWeight.w900, letterSpacing: -1.5)),
+                ],
+              ),
             ],
           ),
         ],
@@ -197,21 +216,21 @@ class _ComprasPageState extends State<ComprasPage> with SingleTickerProviderStat
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Container(
-        height: 48,
+        height: 50,
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.05),
+          color: Colors.white.withValues(alpha: 0.03),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         ),
         child: TextField(
           onChanged: (v) => setState(() => _busqueda = v),
           style: const TextStyle(color: Colors.white, fontSize: 15),
-          decoration: InputDecoration(
-            hintText: 'Buscar proveedor o empresa...',
-            hintStyle: const TextStyle(color: _kTextoSecundario, fontSize: 14),
-            prefixIcon: const Icon(Icons.search_rounded, color: _kTextoSecundario, size: 20),
+          decoration: const InputDecoration(
+            hintText: 'Buscar por empresa o contacto...',
+            hintStyle: TextStyle(color: _kTextoSecundario, fontSize: 14),
+            prefixIcon: Icon(Icons.search_rounded, color: _kNaranjaAcento, size: 22),
             border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(vertical: 14),
+            contentPadding: EdgeInsets.symmetric(vertical: 15),
           ),
         ),
       ),
@@ -223,24 +242,14 @@ class _ComprasPageState extends State<ComprasPage> with SingleTickerProviderStat
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.03),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Icons.factory_rounded,
-                color: Colors.white.withValues(alpha: 0.2), size: 60),
-          ),
+          Icon(Icons.inventory_2_outlined, color: Colors.white.withValues(alpha: 0.1), size: 100),
           const SizedBox(height: 16),
-          const Text('No hay proveedores registrados', style: TextStyle(
-              color: _kTextoSecundario, fontSize: 15)),
+          Text('No se encontraron proveedores', style: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 16, fontWeight: FontWeight.w600)),
         ],
       ),
     );
   }
 
-  // ─── MODAL: DETALLE CUENTA CORRIENTE ────────────────────────
   void _abrirDialHistorial(BuildContext ctx, Proveedor proveedor) {
     showModalBottomSheet(
       context: ctx,
@@ -261,23 +270,29 @@ class _ComprasPageState extends State<ComprasPage> with SingleTickerProviderStat
       builder: (_) => Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
           child: Container(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(
-              color: _kCardBg.withValues(alpha: 0.95),
+              color: _kAzulOscuro.withValues(alpha: 0.9),
               borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
               border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
             ),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              const Text('Nuevo Proveedor', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 24),
-              _CampoG(ctrl: empresaCtrl, hint: 'Empresa (ej: Hilos El Sol)', ico: Icons.factory_rounded, num: false),
-              const SizedBox(height: 12),
-              _CampoG(ctrl: nombreCtrl, hint: 'Nombre del Contacto', ico: Icons.person_rounded, num: false),
-              const SizedBox(height: 24),
+              Container(width: 40, height: 4, margin: const EdgeInsets.only(bottom: 24), decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2))),
+              const Text('NUEVO PROVEEDOR', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: 1)),
+              const SizedBox(height: 28),
+              _CampoBI(ctrl: empresaCtrl, hint: 'Nombre de la Empresa', ico: Icons.factory_rounded),
+              const SizedBox(height: 16),
+              _CampoBI(ctrl: nombreCtrl, hint: 'Persona de Contacto', ico: Icons.person_rounded),
+              const SizedBox(height: 32),
               SizedBox(width: double.infinity, child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: _kNaranjaAcento, padding: const EdgeInsets.symmetric(vertical: 16)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _kNaranjaAcento, 
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  elevation: 8,
+                ),
                 onPressed: () {
                   final empresa = empresaCtrl.text.trim();
                   final nombre = nombreCtrl.text.trim();
@@ -286,7 +301,7 @@ class _ComprasPageState extends State<ComprasPage> with SingleTickerProviderStat
                     Navigator.pop(ctx);
                   }
                 },
-                child: const Text('Guardar Proveedor', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                child: const Text('REGISTRAR AHORA', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15)),
               ))
             ]),
           ),
@@ -297,18 +312,21 @@ class _ComprasPageState extends State<ComprasPage> with SingleTickerProviderStat
 }
 
 // ─────────────────────────────────────────────
-// UI Components Locales
+// REGISTRO PREMIUM — ROW
 // ─────────────────────────────────────────────
-
-class _ProveedorCard extends StatelessWidget {
+class _ProveedorRowPremium extends StatelessWidget {
   final Proveedor proveedor;
   final NumberFormat formatoMoneda;
-  final Function(Proveedor) onVerDetalle;
+  final int index;
+  final AnimationController anim;
+  final VoidCallback onTap;
 
-  const _ProveedorCard({
+  const _ProveedorRowPremium({
     required this.proveedor,
     required this.formatoMoneda,
-    required this.onVerDetalle,
+    required this.index,
+    required this.anim,
+    required this.onTap,
   });
 
   @override
@@ -316,82 +334,60 @@ class _ProveedorCard extends StatelessWidget {
     final saldo = proveedor.saldoDeudorActual;
     final tieneDeuda = saldo > 0;
 
-    return GestureDetector(
-      onTap: () => onVerDetalle(proveedor),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        decoration: BoxDecoration(
-          color: _kCardBg,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 15, offset: const Offset(0, 8))
-          ],
+    return SlideTransition(
+      position: Tween<Offset>(begin: const Offset(0.2, 0), end: Offset.zero).animate(
+        CurvedAnimation(parent: anim, curve: Interval(index * 0.05, 1.0, curve: Curves.easeOutCubic))
+      ),
+      child: FadeTransition(
+        opacity: Tween<double>(begin: 0, end: 1).animate(
+          CurvedAnimation(parent: anim, curve: Interval(index * 0.05, 1.0, curve: Curves.easeIn))
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(24),
-          child: Stack(
-            children: [
-              Positioned(
-                left: -20, top: -20,
-                child: Container(
-                  width: 100, height: 100,
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: _kCardBg.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 50, height: 50,
                   decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(colors: [
-                      _kNaranjaAcento.withValues(alpha: 0.05),
-                      Colors.transparent
-                    ]),
+                    color: _kNaranjaAcento.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Center(
+                    child: Text(proveedor.empresa.substring(0, 1).toUpperCase(), 
+                      style: const TextStyle(color: _kNaranjaAcento, fontSize: 22, fontWeight: FontWeight.w900)),
                   ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(proveedor.empresa, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
+                      Text(proveedor.nombre, style: TextStyle(color: _kTextoSecundario.withValues(alpha: 0.7), fontSize: 12)),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Container(
-                      width: 50, height: 50,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF334155), Color(0xFF1E293B)],
-                        ),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-                      ),
-                      child: Center(
-                        child: Text(proveedor.empresa.substring(0, 1).toUpperCase(), 
-                          style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(proveedor.empresa, style: const TextStyle(
-                              color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16, letterSpacing: -0.3)),
-                          const SizedBox(height: 2),
-                          Text(proveedor.nombre, style: const TextStyle(color: _kTextoSecundario, fontSize: 12, fontWeight: FontWeight.w500)),
-                        ],
-                      ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text('Falta pagar:', style: TextStyle(color: _kTextoSecundario, fontSize: 10, fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 4),
-                        Text(formatoMoneda.format(saldo), style: TextStyle(
-                            color: tieneDeuda ? _kRojoDeuda : _kVerdePago, 
-                            fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: -0.5)),
-                        if (!tieneDeuda && saldo < 0) 
-                          Text('Plata a nuestro favor', style: TextStyle(color: _kVerdePago.withValues(alpha: 0.8), fontSize: 10, fontWeight: FontWeight.w800))
-                      ],
-                    ),
+                    Text(formatoMoneda.format(saldo), style: TextStyle(
+                        color: tieneDeuda ? _kRojoDeuda : _kVerdePago, 
+                        fontWeight: FontWeight.w900, fontSize: 16)),
+                    Text(tieneDeuda ? 'FALTA PAGAR' : 'SALDADO', style: TextStyle(color: (tieneDeuda ? _kRojoDeuda : _kVerdePago).withValues(alpha: 0.6), fontSize: 8, fontWeight: FontWeight.bold)),
                   ],
                 ),
-              ),
-            ],
+                const SizedBox(width: 8),
+                const Icon(Icons.chevron_right_rounded, color: Colors.white24),
+              ],
+            ),
           ),
         ),
       ),
@@ -399,6 +395,9 @@ class _ProveedorCard extends StatelessWidget {
   }
 }
 
+// ─────────────────────────────────────────────
+// MODAL: CUENTA CORRIENTE (ESTILO LIBRO DIARIO)
+// ─────────────────────────────────────────────
 class _ModalCuentaCorriente extends StatefulWidget {
   final Proveedor proveedor;
   const _ModalCuentaCorriente({required this.proveedor});
@@ -409,12 +408,10 @@ class _ModalCuentaCorriente extends StatefulWidget {
 
 class _ModalCuentaCorrienteState extends State<_ModalCuentaCorriente> {
   final _formatoMoneda = NumberFormat.currency(symbol: 'Bs. ', decimalDigits: 2);
-  final _formatoFecha = DateFormat('EEEE d \'de\' MMMM yyyy', 'es'); // ej. "jueves 10 de febrero 2026"
   final _srv = ComprasService.instance;
 
   @override
   Widget build(BuildContext context) {
-    // Escuchar cambios para repintar
     return ListenableBuilder(
       listenable: _srv,
       builder: (context, child) {
@@ -422,7 +419,7 @@ class _ModalCuentaCorrienteState extends State<_ModalCuentaCorriente> {
         final tieneDeuda = saldo > 0;
         
         return Container(
-          height: MediaQuery.of(context).size.height * 0.85,
+          height: MediaQuery.of(context).size.height * 0.9,
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
           decoration: BoxDecoration(
             color: _kAzulOscuro,
@@ -431,44 +428,35 @@ class _ModalCuentaCorrienteState extends State<_ModalCuentaCorriente> {
           ),
           child: Column(
             children: [
-              Container(width: 40, height: 5, margin: const EdgeInsets.only(bottom: 20),
-                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.20),
-                  borderRadius: BorderRadius.circular(10))),
+              Container(width: 40, height: 4, margin: const EdgeInsets.only(bottom: 24), decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2))),
               
               Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Icon(Icons.menu_book_rounded, color: Colors.white, size: 24),
+                    decoration: BoxDecoration(color: _kNaranjaAcento.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(14)),
+                    child: const Icon(Icons.menu_book_rounded, color: _kNaranjaAcento, size: 28),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Cuenta Corriente',
-                            style: const TextStyle(color: Colors.white, fontSize: 20,
-                                fontWeight: FontWeight.w900)),
-                        Text(widget.proveedor.empresa,
-                            style: const TextStyle(color: _kNaranjaAcento,
-                                fontSize: 14, fontWeight: FontWeight.w600)),
+                        const Text('LIBRO DE CUENTA CORRIENTE', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
+                        Text(widget.proveedor.empresa.toUpperCase(), style: const TextStyle(color: _kNaranjaAcento, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1)),
                       ],
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 24),
               
               // Tarjeta Resumen Saldo
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.2),
+                  color: _kCardBg,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
                 ),
@@ -478,83 +466,57 @@ class _ModalCuentaCorrienteState extends State<_ModalCuentaCorriente> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('TOTAL QUE NOS FALTA PAGAR', style: TextStyle(color: _kTextoSecundario, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1)),
+                        const Text('DEUDA PENDIENTE', style: TextStyle(color: _kTextoSecundario, fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 1.2)),
                         const SizedBox(height: 4),
                         Text(_formatoMoneda.format(saldo.abs()), style: TextStyle(
                             color: tieneDeuda ? _kRojoDeuda : _kVerdePago, fontSize: 24, fontWeight: FontWeight.w900)),
                       ],
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: (tieneDeuda ? _kRojoDeuda : _kVerdePago).withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(tieneDeuda ? 'Debo al Proveedor' : 'Saldo a Nuestro Favor', style: TextStyle(
-                          color: tieneDeuda ? _kRojoDeuda : _kVerdePago, fontSize: 12, fontWeight: FontWeight.w800)),
+                    ElevatedButton.icon(
+                      onPressed: () => _abrirDialInsertarEfectivo(context),
+                      icon: const Icon(Icons.add_photo_alternate_rounded, size: 16),
+                      label: const Text('ABONAR (FOTO)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900)),
+                      style: ElevatedButton.styleFrom(backgroundColor: _kVerdePago, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                     )
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               
-              // Botones de Acción
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () => _abrirDialInsertarEfectivo(context),
-                      icon: const Icon(Icons.attach_money_rounded, size: 16),
-                      label: const Text('Abonar Dinero', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _kVerdePago, foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () => _abrirDialInsertarMaterial(context),
-                      icon: const Icon(Icons.inventory_2_rounded, size: 16),
-                      label: const Text('Recibir Material', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _kNaranjaAcento, foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                    ),
-                  ),
-                ],
+              Align(
+                alignment: Alignment.centerLeft,
+                child: ElevatedButton.icon(
+                  onPressed: () => _abrirDialInsertarMaterial(context),
+                  icon: const Icon(Icons.inventory_2_rounded, size: 16),
+                  label: const Text('RECIBIR MATERIAL', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900)),
+                  style: ElevatedButton.styleFrom(backgroundColor: _kNaranjaAcento, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                ),
               ),
               const SizedBox(height: 20),
               
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text('DETALLE DE MOVIMIENTOS', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1))),
+              const Align(alignment: Alignment.centerLeft, child: Text('MOVIMIENTOS CONTABLES', style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5))),
               const SizedBox(height: 8),
               
               Expanded(
                 child: widget.proveedor.historial.isEmpty
-                    ? const Center(child: Text('No hay historial', style: TextStyle(color: _kTextoSecundario)))
+                    ? const Center(child: Text('No hay movimientos', style: TextStyle(color: _kTextoSecundario)))
                     : Container(
                         width: double.infinity,
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.02),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
                         ),
                         child: SingleChildScrollView(
                           scrollDirection: Axis.vertical,
                           child: SingleChildScrollView(
                             scrollDirection: Axis.horizontal,
-                            child: _buildTablaExcel(widget.proveedor.historial.reversed.toList()), // Reversed to calculate balances from old to new
+                            child: _buildTablaContable(widget.proveedor.historial),
                           ),
                         ),
                       ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
             ],
           ),
         );
@@ -562,82 +524,72 @@ class _ModalCuentaCorrienteState extends State<_ModalCuentaCorriente> {
     );
   }
 
-  Widget _buildTablaExcel(List<TransaccionCompra> transacciones) {
+  Widget _buildTablaContable(List<TransaccionCompra> txs) {
+    // Calculamos el saldo acumulado desde el inicio (el historial suele estar en orden inverso de visualización)
     double saldoAcumulado = 0;
-    
-    // Primero, precalcular saldos acumulados ascendentes (de más viejo a más nuevo)
     final List<Map<String, dynamic>> filas = [];
-    for (var tx in transacciones) {
+    
+    // Suponemos que txs viene de ApiService con saldo_acumulado si lo pedimos, pero si no, calculamos:
+    // Nota: El historial en el modelo ya viene ordenado por fecha de servidor.
+    for (var tx in txs.reversed) {
       bool esEntrada = tx.tipo == TipoTransaccion.entregaMaterial;
       if (esEntrada) {
         saldoAcumulado += (tx.importeCobrado ?? 0);
       } else {
         saldoAcumulado -= (tx.montoPagado ?? 0);
       }
-      filas.insert(0, { // Insert in reverse so newest is on top of display
+      filas.insert(0, {
         'tx': tx,
-        'saldoLinea': saldoAcumulado,
+        'saldo': saldoAcumulado,
         'esEntrada': esEntrada,
       });
     }
 
     return DataTable(
+      columnSpacing: 15,
+      horizontalMargin: 10,
       headingRowHeight: 40,
-      dataRowMinHeight: 48,
-      dataRowMaxHeight: 48,
-      headingRowColor: WidgetStateProperty.all(Colors.black.withValues(alpha: 0.4)),
-      horizontalMargin: 12,
-      columnSpacing: 20,
-      border: TableBorder.all(
-        color: Colors.white.withValues(alpha: 0.1),
-        width: 1,
-      ),
+      dataRowHeight: 45,
+      border: TableBorder.all(color: Colors.white.withValues(alpha: 0.1)),
       columns: const [
-        DataColumn(label: Text('Fecha', style: TextStyle(color: _kTextoSecundario, fontWeight: FontWeight.bold, fontSize: 12))),
-        DataColumn(label: Text('Detalle', style: TextStyle(color: _kTextoSecundario, fontWeight: FontWeight.bold, fontSize: 12))),
-        DataColumn(label: Text('Recibo', style: TextStyle(color: _kTextoSecundario, fontWeight: FontWeight.bold, fontSize: 12))),
-        DataColumn(label: Text('Costo (Bs)', style: TextStyle(color: _kTextoSecundario, fontWeight: FontWeight.bold, fontSize: 12))),
-        DataColumn(label: Text('Abonado (Bs)', style: TextStyle(color: _kTextoSecundario, fontWeight: FontWeight.bold, fontSize: 12))),
-        DataColumn(label: Text('Falta (Bs)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12))),
+        DataColumn(label: Text('Fecha', style: TextStyle(color: _kTextoSecundario, fontSize: 11, fontWeight: FontWeight.bold))),
+        DataColumn(label: Text('Detalle', style: TextStyle(color: _kTextoSecundario, fontSize: 11, fontWeight: FontWeight.bold))),
+        DataColumn(label: Text('FOTO', style: TextStyle(color: _kCyan, fontSize: 11, fontWeight: FontWeight.bold))),
+        DataColumn(label: Text('FIRMA', style: TextStyle(color: _kPurple, fontSize: 11, fontWeight: FontWeight.bold))),
+        DataColumn(label: Text('Haber (Bs)', style: TextStyle(color: _kTextoSecundario, fontSize: 11, fontWeight: FontWeight.bold))),
+        DataColumn(label: Text('Debe (Bs)', style: TextStyle(color: _kTextoSecundario, fontSize: 11, fontWeight: FontWeight.bold))),
+        DataColumn(label: Text('Saldo (Bs)', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold))),
       ],
-      rows: filas.map((fila) {
-        final TransaccionCompra tx = fila['tx'];
-        final double saldoLinea = fila['saldoLinea'];
-        final bool esEntrada = fila['esEntrada'];
-        final tieneFoto = tx.comprobantePath != null && tx.comprobantePath!.isNotEmpty;
+      rows: filas.map((f) {
+        final TransaccionCompra tx = f['tx'];
+        final bool esEntrada = f['esEntrada'];
+        final hasPhoto = tx.comprobantePath != null && tx.comprobantePath!.isNotEmpty;
+        final hasFirma = tx.firmaB64 != null && tx.firmaB64!.isNotEmpty;
 
         return DataRow(
           cells: [
-            DataCell(Text(DateFormat('dd/MM/yy').format(tx.fecha), style: const TextStyle(color: Colors.white, fontSize: 12))),
+            DataCell(Text(DateFormat('dd/MM/yy').format(tx.fecha), style: const TextStyle(color: Colors.white70, fontSize: 11))),
+            DataCell(Text(esEntrada ? (tx.detalleMateriaPrima ?? '') : 'Abono/Pago', style: const TextStyle(color: Colors.white, fontSize: 11))),
             DataCell(
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(esEntrada ? '${tx.detalleMateriaPrima}' : 'Pago/Abono', 
-                    style: const TextStyle(color: Colors.white, fontSize: 12)),
-                  if (tx.detalleExtra != null && tx.detalleExtra!.isNotEmpty)
-                    Text(tx.detalleExtra!, 
-                      style: const TextStyle(color: _kTextoSecundario, fontSize: 10, fontStyle: FontStyle.italic)),
-                ],
-              )
-            ),
-            DataCell(
-              tieneFoto 
+              hasPhoto 
                 ? IconButton(
-                    icon: const Icon(Icons.receipt_long_rounded, color: Colors.blueAccent, size: 20),
+                    icon: const Icon(Icons.image_search_rounded, color: _kCyan, size: 20),
                     onPressed: () => _verComprobanteCompleto(context, tx.comprobantePath!),
-                    tooltip: 'Ver Recibo Adjunto',
                   )
                 : const SizedBox.shrink()
             ),
-            DataCell(Text(esEntrada ? _formatoMoneda.format(tx.importeCobrado) : '', 
-                style: const TextStyle(color: _kRojoDeuda, fontWeight: FontWeight.bold, fontSize: 12))),
-            DataCell(Text(!esEntrada ? _formatoMoneda.format(tx.montoPagado) : '', 
-                style: const TextStyle(color: _kVerdePago, fontWeight: FontWeight.bold, fontSize: 12))),
-            DataCell(Text(_formatoMoneda.format(saldoLinea), 
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12))),
-          ],
+            DataCell(
+              hasFirma
+                ? IconButton(
+                    icon: const Icon(Icons.draw_rounded, color: _kPurple, size: 20),
+                    onPressed: () => _verFirmaCompleta(context, tx.firmaB64!),
+                  )
+                : const SizedBox.shrink()
+            ),
+            DataCell(Text(esEntrada ? _formatoMoneda.format(tx.importeCobrado) : '', style: const TextStyle(color: _kRojoDeuda, fontSize: 11, fontWeight: FontWeight.bold))),
+            DataCell(Text(!esEntrada ? _formatoMoneda.format(tx.montoPagado) : '', style: const TextStyle(color: _kVerdePago, fontSize: 11, fontWeight: FontWeight.bold))),
+            DataCell(Text(_formatoMoneda.format(f['saldo']), style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900))),
+          ]
         );
       }).toList(),
     );
@@ -656,104 +608,84 @@ class _ModalCuentaCorrienteState extends State<_ModalCuentaCorriente> {
       builder: (_) => StatefulBuilder(
         builder: (context, setStateModal) {
           String? fotoRuta;
-          DateTime fechaSeleccionada = DateTime.now();
-
-          Future<void> _seleccionarFecha() async {
-            final DateTime? seleccion = await showDatePicker(
-              context: context,
-              initialDate: fechaSeleccionada,
-              firstDate: DateTime(2020),
-              lastDate: DateTime.now(),
-              builder: (context, child) {
-                return Theme(
-                  data: Theme.of(context).copyWith(
-                    colorScheme: const ColorScheme.dark(
-                      primary: _kNaranjaAcento,
-                      onPrimary: Colors.white,
-                      surface: _kCardBg,
-                      onSurface: Colors.white,
-                    ),
-                  ),
-                  child: child!,
-                );
-              },
-            );
-            if (seleccion != null && seleccion != fechaSeleccionada) {
-              setStateModal(() => fechaSeleccionada = seleccion);
-            }
-          }
+          String? firmaB64;
 
           return Padding(
             padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
             child: Container(
               padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: _kCardBg.withValues(alpha: 0.95),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-              ),
+              decoration: BoxDecoration(color: _kAzulOscuro, borderRadius: const BorderRadius.vertical(top: Radius.circular(32))),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-                const Text('Recibir Material', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 24),
+                const Text('RECIBIR MATERIAL', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 20),
+                _CampoBI(ctrl: bolsasCtrl, hint: 'Nº Bolsas', ico: Icons.shopping_bag_rounded, num: true),
+                const SizedBox(height: 12),
+                _CampoBI(ctrl: kilosXBolCtrl, hint: 'Kg por Bolsa', ico: Icons.scale_rounded, num: true),
+                const SizedBox(height: 12),
+                _CampoBI(ctrl: montoCtrl, hint: 'Importe Total (Bs.)', ico: Icons.money_rounded, num: true),
+                const SizedBox(height: 12),
+                _CampoBI(ctrl: obsCtrl, hint: 'Observaciones', ico: Icons.notes_rounded),
+                const SizedBox(height: 20),
                 
-                // --- Selector de Fecha ---
-                GestureDetector(
-                  onTap: _seleccionarFecha,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.calendar_today_rounded, color: _kTextoSecundario, size: 20),
-                        const SizedBox(width: 12),
-                        Text(
-                          'Fecha: ${DateFormat('dd/MM/yyyy').format(fechaSeleccionada)}',
-                          style: const TextStyle(color: Colors.white, fontSize: 14),
-                        ),
-                        const Spacer(),
-                        const Icon(Icons.edit_calendar_rounded, color: _kNaranjaAcento, size: 20),
-                      ],
+                Row(children: [
+                  Expanded(
+                    child: _BotonAdjuntarFoto(
+                      label: 'FOTO FACTURA',
+                      rutaActual: fotoRuta,
+                      onRutaCambiada: (ruta) => setStateModal(() => fotoRuta = ruta),
                     ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                
-                _CampoG(ctrl: bolsasCtrl, hint: 'Nº Bolsas (ej: 38)', ico: Icons.shopping_bag_rounded, num: true),
-                const SizedBox(height: 12),
-                _CampoG(ctrl: kilosXBolCtrl, hint: 'Kg por Bolsa (ej: 6)', ico: Icons.scale_rounded, num: true),
-                const SizedBox(height: 12),
-                _CampoG(ctrl: montoCtrl, hint: 'Importe Cobrado (Bs.)', ico: Icons.money_rounded, num: true),
-                const SizedBox(height: 12),
-                _CampoG(ctrl: obsCtrl, hint: 'Observaciones (opcional)', ico: Icons.notes_rounded, num: false),
-                const SizedBox(height: 16),
-                _BotonAdjuntarFoto(
-                  rutaActual: fotoRuta,
-                  onRutaCambiada: (ruta) => setStateModal(() => fotoRuta = ruta),
-                ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: InkWell(
+                      onTap: () async {
+                        final data = await showDialog<Uint8List>(context: context, builder: (_) => const CobDialogFirma());
+                        if (data != null) setStateModal(() => firmaB64 = base64Encode(data));
+                      },
+                      child: Container(
+                        height: 100,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.05),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: _kPurple.withValues(alpha: 0.3)),
+                        ),
+                        child: firmaB64 == null
+                          ? const Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                              Icon(Icons.draw_rounded, color: _kPurple, size: 28),
+                              SizedBox(height: 4),
+                              Text('FIRMA RECIBIDO', style: TextStyle(color: _kPurple, fontSize: 10, fontWeight: FontWeight.bold)),
+                            ])
+                          : ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: Image.memory(base64Decode(firmaB64!), fit: BoxFit.contain, color: Colors.white),
+                            ),
+                      ),
+                    ),
+                  ),
+                ]),
+
                 const SizedBox(height: 24),
                 SizedBox(width: double.infinity, child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: _kNaranjaAcento, padding: const EdgeInsets.symmetric(vertical: 16)),
+                  style: ElevatedButton.styleFrom(backgroundColor: _kNaranjaAcento, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
                   onPressed: () {
-                    final bolsas = double.tryParse(bolsasCtrl.text) ?? 0;
-                    final kilos = double.tryParse(kilosXBolCtrl.text) ?? 0;
-                    final monto = double.tryParse(montoCtrl.text) ?? 0;
-                    if (bolsas > 0 && monto > 0) {
+                    final b = double.tryParse(bolsasCtrl.text) ?? 0;
+                    final k = double.tryParse(kilosXBolCtrl.text) ?? 0;
+                    final m = double.tryParse(montoCtrl.text) ?? 0;
+                    if (b > 0 && m > 0) {
                       _srv.registrarEntregaMaterial(
                         widget.proveedor, 
-                        '${bolsas.toInt()} bolsas a ${kilos.toInt()}kg', 
-                        bolsas * kilos, 
-                        monto,
+                        '${b.toInt()} bolsas a ${k.toInt()}kg', 
+                        b * k, m, 
                         comprobantePath: fotoRuta,
-                        fechaRegistro: fechaSeleccionada,
-                        detalleExtra: obsCtrl.text.trim().isNotEmpty ? obsCtrl.text.trim() : null,
+                        firmaB64: firmaB64,
+                        detalleExtra: obsCtrl.text.trim(),
                       );
                       Navigator.pop(ctx);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ingresa bolsas y monto.')));
                     }
                   },
-                  child: const Text('Registrar Deuda', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                  child: const Text('GUARDAR RÉCORD', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
                 ))
               ]),
             ),
@@ -774,96 +706,41 @@ class _ModalCuentaCorrienteState extends State<_ModalCuentaCorriente> {
       builder: (_) => StatefulBuilder(
         builder: (context, setStateModal) {
           String? fotoRuta;
-          DateTime fechaSeleccionada = DateTime.now();
-
-          Future<void> _seleccionarFecha() async {
-            final DateTime? seleccion = await showDatePicker(
-              context: context,
-              initialDate: fechaSeleccionada,
-              firstDate: DateTime(2020),
-              lastDate: DateTime.now(),
-              builder: (context, child) {
-                return Theme(
-                  data: Theme.of(context).copyWith(
-                    colorScheme: const ColorScheme.dark(
-                      primary: _kVerdePago,
-                      onPrimary: Colors.white,
-                      surface: _kCardBg,
-                      onSurface: Colors.white,
-                    ),
-                  ),
-                  child: child!,
-                );
-              },
-            );
-            if (seleccion != null && seleccion != fechaSeleccionada) {
-              setStateModal(() => fechaSeleccionada = seleccion);
-            }
-          }
-
           return Padding(
             padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
             child: Container(
               padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: _kCardBg.withValues(alpha: 0.95),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-              ),
+              decoration: BoxDecoration(color: _kAzulOscuro, borderRadius: const BorderRadius.vertical(top: Radius.circular(32))),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-                const Text('Abonar Dinero', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 24),
-
-                // --- Selector de Fecha ---
-                GestureDetector(
-                  onTap: _seleccionarFecha,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.calendar_today_rounded, color: _kTextoSecundario, size: 20),
-                        const SizedBox(width: 12),
-                        Text(
-                          'Fecha: ${DateFormat('dd/MM/yyyy').format(fechaSeleccionada)}',
-                          style: const TextStyle(color: Colors.white, fontSize: 14),
-                        ),
-                        const Spacer(),
-                        const Icon(Icons.edit_calendar_rounded, color: _kVerdePago, size: 20),
-                      ],
-                    ),
-                  ),
-                ),
+                const Text('REGISTRAR ABONO / DEPÓSITO', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 20),
+                _CampoBI(ctrl: montoCtrl, hint: 'Monto Abonado (Bs.)', ico: Icons.money_rounded, num: true),
                 const SizedBox(height: 12),
-
-                _CampoG(ctrl: montoCtrl, hint: 'Monto a pagar (Bs.)', ico: Icons.payments_rounded, num: true),
-                const SizedBox(height: 12),
-                _CampoG(ctrl: obsCtrl, hint: 'Observaciones (opcional)', ico: Icons.notes_rounded, num: false),
+                _CampoBI(ctrl: obsCtrl, hint: 'Observaciones de depósito', ico: Icons.notes_rounded),
                 const SizedBox(height: 16),
                 _BotonAdjuntarFoto(
+                  label: 'FOTO COMPROBANTE',
                   rutaActual: fotoRuta,
                   onRutaCambiada: (ruta) => setStateModal(() => fotoRuta = ruta),
                 ),
                 const SizedBox(height: 24),
                 SizedBox(width: double.infinity, child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: _kVerdePago, padding: const EdgeInsets.symmetric(vertical: 16)),
+                  style: ElevatedButton.styleFrom(backgroundColor: _kVerdePago, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
                   onPressed: () {
-                    final monto = double.tryParse(montoCtrl.text) ?? 0;
-                    if (monto > 0) {
+                    final m = double.tryParse(montoCtrl.text) ?? 0;
+                    if (m > 0) {
                       _srv.registrarPagoEfectivo(
                         widget.proveedor, 
-                        monto, 
+                        m, 
                         comprobantePath: fotoRuta,
-                        fechaRegistro: fechaSeleccionada,
-                        detalleExtra: obsCtrl.text.trim().isNotEmpty ? obsCtrl.text.trim() : null,
+                        detalleExtra: obsCtrl.text.trim()
                       );
                       Navigator.pop(ctx);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ingresa un monto válido.')));
                     }
                   },
-                  child: const Text('Registrar Abono', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                  child: const Text('REGISTRAR DEPÓSITO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
                 ))
               ]),
             ),
@@ -874,119 +751,118 @@ class _ModalCuentaCorrienteState extends State<_ModalCuentaCorriente> {
   }
 }
 
-class _CampoG extends StatelessWidget {
+// ─────────────────────────────────────────────
+// WIDGETS AUXILIARES
+// ─────────────────────────────────────────────
+
+class _CampoBI extends StatelessWidget {
   final TextEditingController ctrl;
   final String hint;
   final IconData ico;
   final bool num;
-  const _CampoG({required this.ctrl, required this.hint, required this.ico, required this.num});
+  const _CampoBI({required this.ctrl, required this.hint, required this.ico, this.num = false});
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
-      controller: ctrl,
-      keyboardType: num ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
-      style: const TextStyle(color: Colors.white),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: const TextStyle(color: _kTextoSecundario, fontSize: 14),
-        prefixIcon: Icon(ico, color: _kTextoSecundario, size: 20),
-        filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.05),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: TextField(
+        controller: ctrl,
+        keyboardType: num ? TextInputType.number : TextInputType.text,
+        style: const TextStyle(color: Colors.white, fontSize: 14),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: const TextStyle(color: Colors.white24, fontSize: 13),
+          prefixIcon: Icon(ico, color: _kNaranjaAcento, size: 18),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        ),
       ),
     );
   }
 }
 
-// Ventana flotante interactiva para ver el comprobante de pago completo
+class _BotonAdjuntarFoto extends StatelessWidget {
+  final String label;
+  final String? rutaActual;
+  final Function(String?) onRutaCambiada;
+
+  const _BotonAdjuntarFoto({required this.label, this.rutaActual, required this.onRutaCambiada});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () async {
+        final picker = ImagePicker();
+        final img = await picker.pickImage(source: ImageSource.camera);
+        if (img != null) onRutaCambiada(img.path);
+      },
+      child: Container(
+        height: 100,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _kCyan.withValues(alpha: 0.3)),
+        ),
+        child: rutaActual == null 
+          ? Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+              const Icon(Icons.add_a_photo_rounded, color: _kCyan, size: 28),
+              const SizedBox(height: 4),
+              Text(label, style: const TextStyle(color: _kCyan, fontSize: 10, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+            ])
+          : ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Image.file(File(rutaActual!), fit: BoxFit.cover),
+            ),
+      ),
+    );
+  }
+}
+
 void _verComprobanteCompleto(BuildContext context, String path) {
   showDialog(
     context: context,
     builder: (_) => Dialog(
       backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.all(10),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Stack(
-          alignment: Alignment.topRight,
-          children: [
-            Image.file(File(path), fit: BoxFit.contain),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: IconButton(
-                icon: const Icon(Icons.cancel, color: Colors.white, size: 36),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ),
-          ],
-        ),
+      child: Stack(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Image.file(File(path)),
+          ),
+          Positioned(right: 10, top: 10, child: CircleAvatar(backgroundColor: Colors.black54, child: IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: () => Navigator.pop(context))))
+        ],
       ),
-    ),
+    )
   );
 }
 
-class _BotonAdjuntarFoto extends StatelessWidget {
-  final String? rutaActual;
-  final Function(String?) onRutaCambiada;
-
-  const _BotonAdjuntarFoto({this.rutaActual, required this.onRutaCambiada});
-
-  @override
-  Widget build(BuildContext context) {
-    if (rutaActual != null && rutaActual!.isNotEmpty) {
-      return Container(
-        height: 80,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: _kNaranjaAcento.withValues(alpha: 0.5)),
-        ),
-        child: Row(
-          children: [
-            const SizedBox(width: 8),
-            ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.file(File(rutaActual!), width: 60, height: 60, fit: BoxFit.cover)),
-            const SizedBox(width: 12),
-            const Expanded(child: Text('Foto adjuntada', style: TextStyle(color: Colors.white, fontSize: 13))),
-            IconButton(icon: const Icon(Icons.delete_outline_rounded, color: _kRojoDeuda), onPressed: () => onRutaCambiada(null)),
-          ],
-        ),
-      );
-    }
-
-    return Row(
-      children: [
-        Expanded(
-          child: OutlinedButton.icon(
-            icon: const Icon(Icons.camera_alt_rounded, size: 18),
-            label: const Text('Cámara'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.white,
-              side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
-              padding: const EdgeInsets.symmetric(vertical: 12),
-            ),
-            onPressed: () async {
-              final img = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 70);
-              if (img != null) onRutaCambiada(img.path);
-            },
+void _verFirmaCompleta(BuildContext context, String b64) {
+  showDialog(
+    context: context,
+    builder: (_) => Dialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Text('FIRMA DE CONFORMIDAD', style: TextStyle(fontWeight: FontWeight.bold, color: _kAzulOscuro)),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: OutlinedButton.icon(
-            icon: const Icon(Icons.photo_library_rounded, size: 18),
-            label: const Text('Galería'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.white,
-              side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
-              padding: const EdgeInsets.symmetric(vertical: 12),
-            ),
-            onPressed: () async {
-              final img = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 70);
-              if (img != null) onRutaCambiada(img.path);
-            },
+          Container(
+            padding: const EdgeInsets.all(20),
+            color: Colors.white,
+            child: Image.memory(base64Decode(b64), color: _kAzulOscuro),
           ),
-        ),
-      ],
-    );
-  }
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('CERRAR'))
+        ],
+      ),
+    )
+  );
 }

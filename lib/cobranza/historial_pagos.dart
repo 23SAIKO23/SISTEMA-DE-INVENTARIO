@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/app_service.dart';
 import '../ventas/modelos_venta.dart';
 import 'cobranza_widgets.dart';
+import 'recibo_pdf.dart';
 
 // ── Paleta ────────────────────────────────────
 const _kAzul       = Color(0xFF1565C0);
@@ -127,17 +128,83 @@ class _HistorialPagosState extends State<HistorialPagos> {
       ),
       const SizedBox(height: 10),
 
-      // Lista
+      // Lista (Tabla)
       Expanded(
         child: _conHistorial.isEmpty
             ? const CobEmpty('Sin historial de abonos registrados')
-            : ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-                itemCount: _conHistorial.length,
-                itemBuilder: (_, i) => _TarjetaResumenCliente(
-                  venta: _conHistorial[i],
-                  onTap: () =>
-                      setState(() => _seleccionada = _conHistorial[i]),
+            : Container(
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                decoration: BoxDecoration(
+                  color: _kFondo2.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 10, offset: const Offset(0, 4))
+                  ],
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  children: [
+                    // Cabecera
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: _kAzul.withValues(alpha: 0.15),
+                        border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
+                      ),
+                      child: const Row(
+                        children: [
+                          Expanded(flex: 3, child: Text('Cliente', style: TextStyle(color: _kAzulClaro, fontWeight: FontWeight.bold, fontSize: 12))),
+                          Expanded(flex: 2, child: Text('Tipo / Color', style: TextStyle(color: _kAzulClaro, fontWeight: FontWeight.bold, fontSize: 12))),
+                          Expanded(flex: 2, child: Text('Detalle Compra', style: TextStyle(color: _kAzulClaro, fontWeight: FontWeight.bold, fontSize: 12))),
+                          Expanded(flex: 2, child: Text('Total Cobrado', textAlign: TextAlign.right, style: TextStyle(color: _kAzulClaro, fontWeight: FontWeight.bold, fontSize: 12))),
+                          Expanded(flex: 2, child: Padding(padding: EdgeInsets.only(left: 16), child: Text('Pendiente', textAlign: TextAlign.right, style: TextStyle(color: _kAzulClaro, fontWeight: FontWeight.bold, fontSize: 12)))),
+                          Expanded(flex: 2, child: Text('Acciones', textAlign: TextAlign.right, style: TextStyle(color: _kAzulClaro, fontWeight: FontWeight.bold, fontSize: 12))),
+                        ],
+                      ),
+                    ),
+                    // Cuerpo
+                    Expanded(
+                      child: ListView.builder(
+                        padding: EdgeInsets.zero,
+                        itemCount: _conHistorial.length,
+                        itemBuilder: (context, i) {
+                          final venta = _conHistorial[i];
+                          final color = venta.saldado ? _kVerde : (venta.progreso >= 0.5 ? _kVerdeClaro : _kAzulClaro);
+                          
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: i.isEven ? Colors.transparent : Colors.white.withValues(alpha: 0.02),
+                              border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.05))),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(flex: 3, child: Text(venta.cliente, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 12))),
+                                Expanded(flex: 2, child: Text(venta.color.isEmpty ? venta.tipo.name.toUpperCase() : '${venta.tipo.name.toUpperCase()} · ${venta.color}', style: const TextStyle(color: Colors.white, fontSize: 12))),
+                                Expanded(flex: 2, child: Text('${venta.cantidad.toStringAsFixed(0)} u. x Bs ${venta.precioUnit.toStringAsFixed(1)}', style: const TextStyle(color: Colors.white, fontSize: 12))),
+                                Expanded(flex: 2, child: Text('Bs ${venta.montoPagado.toStringAsFixed(0)}', textAlign: TextAlign.right, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12))),
+                                Expanded(flex: 2, child: Padding(padding: const EdgeInsets.only(left: 16), child: Text('Bs ${venta.pendiente.toStringAsFixed(0)}', textAlign: TextAlign.right, style: const TextStyle(color: Colors.white, fontSize: 12)))),
+                                Expanded(flex: 2, child: Align(
+                                  alignment: Alignment.centerRight,
+                                  child: OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: _kAzulClaro,
+                                      side: BorderSide(color: _kAzulClaro.withValues(alpha: 0.5)),
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    ),
+                                    icon: const Icon(Icons.visibility_rounded, size: 16),
+                                    label: const Text('Ver detalles', style: TextStyle(fontSize: 12)),
+                                    onPressed: () => setState(() => _seleccionada = venta),
+                                  )
+                                )),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ),
       ),
@@ -209,146 +276,142 @@ class _HistorialPagosState extends State<HistorialPagos> {
           Text('Línea de tiempo — ${pagos.length} abono(s)',
               style: const TextStyle(color: Colors.white,
                   fontWeight: FontWeight.w800, fontSize: 13)),
+          const Spacer(),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _kAzulClaro.withValues(alpha: 0.1),
+              foregroundColor: _kAzulClaro,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+                side: BorderSide(color: _kAzulClaro.withValues(alpha: 0.3)),
+              ),
+            ),
+            icon: const Icon(Icons.print_rounded, size: 16),
+            label: const Text('Comprobante', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+            onPressed: () => ReciboPdf.generarEImprimir(v, context),
+          ),
         ]),
       ),
       const SizedBox(height: 10),
 
-      // Línea de tiempo
+      // Línea de tiempo (Tabla)
       Expanded(
         child: pagos.isEmpty
             ? const CobEmpty('Sin abonos registrados')
-            : ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-                itemCount: pagos.length,
-                itemBuilder: (_, i) {
-                  final acumulado = pagos
-                      .sublist(i)
-                      .fold(0.0, (s, p) => s + p.monto);
-                  return _ItemLineaTiempo(
-                    pago: pagos[i],
-                    numero: pagos.length - i,
-                    esUltimo: i == pagos.length - 1,
-                    acumulado: acumulado,
-                  );
-                },
+            : Container(
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                decoration: BoxDecoration(
+                  color: _kFondo2.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 10, offset: const Offset(0, 4))
+                  ],
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  children: [
+                    // Cabecera
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: _kAzul.withValues(alpha: 0.15),
+                        border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
+                      ),
+                      child: const Row(
+                        children: [
+                          Expanded(flex: 1, child: Text('#', style: TextStyle(color: _kAzulClaro, fontWeight: FontWeight.bold, fontSize: 13))),
+                          Expanded(flex: 3, child: Text('Fecha y Hora', style: TextStyle(color: _kAzulClaro, fontWeight: FontWeight.bold, fontSize: 13))),
+                          Expanded(flex: 3, child: Text('Nota', style: TextStyle(color: _kAzulClaro, fontWeight: FontWeight.bold, fontSize: 13))),
+                          Expanded(flex: 1, child: Text('Recibo', textAlign: TextAlign.center, style: TextStyle(color: _kAzulClaro, fontWeight: FontWeight.bold, fontSize: 13))),
+                          Expanded(flex: 2, child: Text('Monto Abono', textAlign: TextAlign.right, style: TextStyle(color: _kAzulClaro, fontWeight: FontWeight.bold, fontSize: 13))),
+                          Expanded(flex: 2, child: Padding(padding: EdgeInsets.only(left: 16), child: Text('Acumulado (hasta ahí)', textAlign: TextAlign.right, style: TextStyle(color: _kAzulClaro, fontWeight: FontWeight.bold, fontSize: 13)))),
+                        ],
+                      ),
+                    ),
+                    // Cuerpo
+                    Expanded(
+                      child: ListView.builder(
+                        padding: EdgeInsets.zero,
+                        itemCount: pagos.length,
+                        itemBuilder: (context, i) {
+                          final pago = pagos[i];
+                          final numero = pagos.length - i;
+                          final acumulado = pagos.sublist(i).fold(0.0, (s, p) => s + p.monto);
+                          final color = numero == 1 ? _kVerdeClaro : _kAzulClaro;
+                          
+                          String fmt(DateTime d) => '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+                          
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: i.isEven ? Colors.transparent : Colors.white.withValues(alpha: 0.02),
+                              border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.05))),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(flex: 1, child: Text('$numero', style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13))),
+                                Expanded(flex: 3, child: Text(fmt(pago.fecha), style: const TextStyle(color: Colors.white, fontSize: 13))),
+                                Expanded(flex: 3, child: Text(pago.nota.isEmpty ? '-' : pago.nota, style: TextStyle(color: _kVerdeClaro.withValues(alpha: 0.8), fontStyle: FontStyle.italic, fontSize: 13))),
+                                Expanded(
+                                  flex: 1, 
+                                  child: pago.comprobante != null && pago.comprobante!.isNotEmpty
+                                      ? Center(
+                                          child: IconButton(
+                                            icon: const Icon(Icons.receipt_long_rounded, color: _kAzulClaro, size: 20),
+                                            tooltip: 'Ver Comprobante',
+                                            onPressed: () => _mostrarComprobante(context, pago.comprobante!),
+                                          ),
+                                        )
+                                      : const SizedBox.shrink()
+                                ),
+                                Expanded(flex: 2, child: Text('Bs ${pago.monto.toStringAsFixed(2)}', textAlign: TextAlign.right, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13))),
+                                Expanded(flex: 2, child: Padding(padding: const EdgeInsets.only(left: 16), child: Text('Bs ${acumulado.toStringAsFixed(2)}', textAlign: TextAlign.right, style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 13)))),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
               ),
       ),
     ]);
   }
-}
 
-// ── Tarjeta resumen en listado ─────────────────
-class _TarjetaResumenCliente extends StatelessWidget {
-  final Venta venta;
-  final VoidCallback onTap;
-  const _TarjetaResumenCliente({required this.venta, required this.onTap});
-
-  Color get _color => venta.saldado ? _kVerde
-      : venta.progreso >= 0.5 ? _kVerdeClaro
-      : _kAzulClaro;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = _color;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        decoration: BoxDecoration(
-          color: _kFondo2, borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withValues(alpha: 0.45), width: 1.5),
-          boxShadow: [BoxShadow(color: color.withValues(alpha: 0.10),
-              blurRadius: 12, offset: const Offset(0, 3))],
+  void _mostrarComprobante(BuildContext context, String fileName) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Stack(
+          alignment: Alignment.topRight,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.network(
+                'http://localhost/marcali/uploads/comprobantes/$fileName',
+                fit: BoxFit.contain,
+              ),
+            ),
+            IconButton(
+              icon: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                child: const Icon(Icons.close, color: Colors.white),
+              ),
+              onPressed: () => Navigator.pop(context),
+            )
+          ],
         ),
-        child: Column(children: [
-          Container(height: 3, decoration: BoxDecoration(
-            gradient: const LinearGradient(
-                colors: [_kAzul, _kAzulClaro, _kVerde, _kVerdeClaro]),
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(15)),
-          )),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-            child: Column(children: [
-              Row(children: [
-                Container(
-                  width: 44, height: 44,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(colors: [_kAzul, color],
-                        begin: Alignment.topLeft, end: Alignment.bottomRight),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Center(child: Text(venta.cliente[0].toUpperCase(),
-                      style: const TextStyle(color: Colors.white,
-                          fontWeight: FontWeight.w900, fontSize: 18))),
-                ),
-                const SizedBox(width: 12),
-                Expanded(child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(venta.cliente,
-                      style: const TextStyle(color: Colors.white,
-                          fontWeight: FontWeight.w800, fontSize: 14)),
-                  const SizedBox(height: 2),
-                  Text(venta.color.isEmpty
-                          ? 'Venta #${venta.id}' : venta.color,
-                      style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.50),
-                          fontSize: 11)),
-                  const SizedBox(height: 4),
-                  Row(children: [
-                    Icon(Icons.receipt_long_rounded, size: 11,
-                        color: _kAzulClaro.withValues(alpha: 0.70)),
-                    const SizedBox(width: 4),
-                    Text('${venta.historialAbonos.length} abono(s) registrado(s)',
-                        style: TextStyle(
-                            color: _kAzulClaro.withValues(alpha: 0.70),
-                            fontSize: 10, fontWeight: FontWeight.w600)),
-                  ]),
-                ])),
-                Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                  Text('Bs ${venta.montoPagado.toStringAsFixed(0)}',
-                      style: TextStyle(color: color,
-                          fontWeight: FontWeight.w900, fontSize: 16)),
-                  Text('cobrado',
-                      style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.35),
-                          fontSize: 9)),
-                  const SizedBox(height: 4),
-                  const Icon(Icons.chevron_right_rounded,
-                      color: Colors.white38, size: 18),
-                ]),
-              ]),
-              const SizedBox(height: 8),
-              Stack(children: [
-                Container(height: 5, decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.07),
-                  borderRadius: BorderRadius.circular(6),
-                )),
-                FractionallySizedBox(widthFactor: venta.progreso,
-                  child: Container(height: 5, decoration: BoxDecoration(
-                    gradient: LinearGradient(colors: [_kAzulClaro, color]),
-                    borderRadius: BorderRadius.circular(6),
-                  )),
-                ),
-              ]),
-              const SizedBox(height: 5),
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                Text(venta.saldado ? '✅ Saldado'
-                    : '${(venta.progreso * 100).toStringAsFixed(0)}% cobrado',
-                    style: TextStyle(color: color, fontSize: 10,
-                        fontWeight: FontWeight.w700)),
-                Text('Bs ${venta.pendiente.toStringAsFixed(0)} pendiente',
-                    style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.40),
-                        fontSize: 10)),
-              ]),
-            ]),
-          ),
-        ]),
       ),
     );
   }
 }
+
 
 // ── Tarjeta resumen en detalle ─────────────────
 class _TarjetaResumenDetalle extends StatelessWidget {
@@ -361,45 +424,33 @@ class _TarjetaResumenDetalle extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color.withValues(alpha: 0.35)),
       ),
-      child: Column(children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          _Col('Total', 'Bs ${venta.total.toStringAsFixed(2)}',
-              Colors.white70),
-          _Col('Cobrado', 'Bs ${venta.montoPagado.toStringAsFixed(2)}',
-              _kVerde),
-          _Col('Pendiente', 'Bs ${venta.pendiente.toStringAsFixed(2)}',
-              venta.saldado ? Colors.white38 : _kRojo),
-        ]),
-        const SizedBox(height: 12),
-        Stack(children: [
-          Container(height: 10, decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.07),
-            borderRadius: BorderRadius.circular(8),
-          )),
-          FractionallySizedBox(widthFactor: venta.progreso,
-            child: Container(height: 10, decoration: BoxDecoration(
-              gradient: LinearGradient(
-                  colors: [_kAzul, _kAzulClaro, color]),
-              borderRadius: BorderRadius.circular(8),
-              boxShadow: [BoxShadow(color: color.withValues(alpha: 0.50),
-                  blurRadius: 8)],
-            )),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround, 
+            children: [
+              _Col('Cantidad', '${venta.cantidad.toStringAsFixed(0)} aguayos', Colors.white),
+              _Col('Producto', venta.tipo.name.toUpperCase(), Colors.white),
+              _Col('Precio Unit.', 'Bs ${venta.precioUnit.toStringAsFixed(2)}', Colors.white70),
+            ]
           ),
-        ]),
-        const SizedBox(height: 8),
-        Text(
-          venta.saldado
-              ? '✅ Cuenta totalmente saldada'
-              : '${(venta.progreso * 100).toStringAsFixed(1)}% completado — '
-                'Bs ${venta.pendiente.toStringAsFixed(2)} por cobrar',
-          style: TextStyle(color: color, fontSize: 11,
-              fontWeight: FontWeight.w700),
-          textAlign: TextAlign.center,
-        ),
-      ]),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Divider(color: Colors.white24, height: 1),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround, 
+            children: [
+              _Col('Total Venta', 'Bs ${venta.total.toStringAsFixed(2)}', Colors.white70),
+              _Col('Cobrado', 'Bs ${venta.montoPagado.toStringAsFixed(2)}', _kVerde),
+              _Col('Pendiente', 'Bs ${venta.pendiente.toStringAsFixed(2)}', venta.saldado ? Colors.white38 : _kRojo),
+            ]
+          ),
+        ],
+      ),
     );
   }
 }
@@ -414,120 +465,6 @@ class _Col extends StatelessWidget {
     Text(l, style: TextStyle(color: Colors.white.withValues(alpha: 0.40),
         fontSize: 9)),
   ]);
-}
-
-// ── Ítem de línea de tiempo ───────────────────
-class _ItemLineaTiempo extends StatelessWidget {
-  final AbonoVenta pago;
-  final int numero;
-  final bool esUltimo;
-  final double acumulado;
-  const _ItemLineaTiempo({required this.pago, required this.numero,
-      required this.esUltimo, required this.acumulado});
-
-  String _fmt(DateTime d) =>
-      '${d.day.toString().padLeft(2, '0')}/'
-      '${d.month.toString().padLeft(2, '0')}/'
-      '${d.year}  ${d.hour.toString().padLeft(2, '0')}:'
-      '${d.minute.toString().padLeft(2, '0')}';
-
-  @override
-  Widget build(BuildContext context) {
-    final color = numero == 1 ? _kVerdeClaro : _kAzulClaro;
-    return IntrinsicHeight(
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        SizedBox(width: 36, child: Column(children: [
-          Container(
-            width: 28, height: 28,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(colors: [_kAzul, color]),
-              shape: BoxShape.circle,
-              boxShadow: [BoxShadow(color: color.withValues(alpha: 0.50),
-                  blurRadius: 8)],
-            ),
-            child: Center(child: Text('$numero',
-                style: const TextStyle(color: Colors.white,
-                    fontSize: 11, fontWeight: FontWeight.w900))),
-          ),
-          if (!esUltimo)
-            Expanded(child: Container(width: 2,
-              margin: const EdgeInsets.symmetric(vertical: 4),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(colors: [
-                  color.withValues(alpha: 0.60),
-                  color.withValues(alpha: 0.10),
-                ], begin: Alignment.topCenter, end: Alignment.bottomCenter),
-              ),
-            )),
-        ])),
-        const SizedBox(width: 10),
-        Expanded(child: Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: _kFondo2, borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: color.withValues(alpha: 0.40), width: 1.5),
-            boxShadow: [BoxShadow(color: color.withValues(alpha: 0.08),
-                blurRadius: 10, offset: const Offset(0, 3))],
-          ),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: color.withValues(alpha: 0.40)),
-                ),
-                child: Text('Abono #$numero',
-                    style: TextStyle(color: color, fontSize: 10,
-                        fontWeight: FontWeight.w700)),
-              ),
-              Text('Bs ${pago.monto.toStringAsFixed(2)}',
-                  style: TextStyle(color: color,
-                      fontWeight: FontWeight.w900, fontSize: 18)),
-            ]),
-            const SizedBox(height: 8),
-            Row(children: [
-              Icon(Icons.access_time_rounded, size: 11,
-                  color: Colors.white.withValues(alpha: 0.40)),
-              const SizedBox(width: 5),
-              Text(_fmt(pago.fecha), style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.45), fontSize: 11)),
-            ]),
-            if (pago.nota.isNotEmpty) ...[
-              const SizedBox(height: 5),
-              Row(children: [
-                Icon(Icons.notes_rounded, size: 11,
-                    color: _kVerdeClaro.withValues(alpha: 0.60)),
-                const SizedBox(width: 5),
-                Expanded(child: Text(pago.nota, style: TextStyle(
-                    color: _kVerdeClaro.withValues(alpha: 0.80),
-                    fontSize: 11, fontStyle: FontStyle.italic))),
-              ]),
-            ],
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.04),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(children: [
-                Icon(Icons.account_balance_wallet_rounded, size: 11,
-                    color: _kVerde.withValues(alpha: 0.70)),
-                const SizedBox(width: 5),
-                Text('Acumulado hasta aquí: Bs ${acumulado.toStringAsFixed(2)}',
-                    style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.50),
-                        fontSize: 10)),
-              ]),
-            ),
-          ]),
-        )),
-      ]),
-    );
-  }
 }
 
 // ── Widgets auxiliares ────────────────────────

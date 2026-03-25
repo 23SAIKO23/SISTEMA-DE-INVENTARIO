@@ -221,9 +221,6 @@ class _SemaforoPagoPageState extends State<SemaforoPagoPage>
                     return _SemaforoClienteCard(
                       cliente: cl,
                       config: _config(estado),
-                      onCambiar: (nuevoEstado) {
-                        setState(() => cl.estadoPago = nuevoEstado);
-                      },
                     );
                   },
                   childCount: _grupo(estado).length,
@@ -410,12 +407,10 @@ class _SectionHeader extends StatelessWidget {
 class _SemaforoClienteCard extends StatelessWidget {
   final Cliente cliente;
   final _SemaforoConfig config;
-  final void Function(EstadoPago) onCambiar;
 
   const _SemaforoClienteCard({
     required this.cliente,
     required this.config,
-    required this.onCambiar,
   });
 
   @override
@@ -488,125 +483,10 @@ class _SemaforoClienteCard extends StatelessWidget {
               ],
             ),
           ),
-
-          // Botón cambiar estado
-          GestureDetector(
-            onTap: () => _mostrarCambioEstado(context),
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: config.color.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: config.color.withValues(alpha: 0.35)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.swap_horiz_rounded,
-                      size: 12, color: config.color),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Cambiar',
-                    style: TextStyle(
-                      color: config.color,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
         ],
       ),
     );
   }
-
-  void _mostrarCambioEstado(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1A0035),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40, height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(4)),
-              ),
-            ),
-            Text(
-              'Cambiar estado — ${cliente.nombre}',
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
-              ),
-            ),
-            const SizedBox(height: 16),
-            ...EstadoPago.values.map((e) {
-              final seleccionado = cliente.estadoPago == e;
-              final c = _colorEstado(e);
-              final ico = _iconEstado(e);
-              final lbl = _labelEstado(e);
-              return GestureDetector(
-                onTap: () {
-                  onCambiar(e);
-                  Navigator.pop(context);
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: seleccionado
-                        ? c.withValues(alpha: 0.15)
-                        : Colors.white.withValues(alpha: 0.03),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: seleccionado
-                          ? c
-                          : Colors.white.withValues(alpha: 0.08),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(ico, color: c, size: 22),
-                      const SizedBox(width: 12),
-                      Text(
-                        lbl,
-                        style: TextStyle(
-                          color: seleccionado ? c : Colors.white70,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                        ),
-                      ),
-                      const Spacer(),
-                      if (seleccionado)
-                        Icon(Icons.check_rounded, color: c, size: 18),
-                    ],
-                  ),
-                ),
-              );
-            }),
-          ],
-        ),
-      ),
-    );
-  }
-
   Color _colorEstado(EstadoPago e) {
     switch (e) {
       case EstadoPago.puntual:

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../services/api_service.dart';
 
 // ─── Registro Semanal por Máquina ──────────────────────────────────────────
 class RegistroSemana {
@@ -64,42 +65,50 @@ class Maquina {
 // ─── Servicio singleton de Producción ─────────────────────────────────────
 class ProduccionService extends ChangeNotifier {
   ProduccionService._() {
-    // Al iniciar, verifica si hay que abrir semana para maquinas vacias
-    _asegurarSemanaAbierta();
+    cargarDesdeServidor();
   }
   
   static final ProduccionService instance = ProduccionService._();
 
-  final List<Maquina> _maquinas = [
-    Maquina(
-      id: 'M01', nombre: 'Máquina 1', trabajadorAsignado: 'Juan Mamani',
-      historialProduccion: [
-        RegistroSemana(
-          id: '2026-W09', 
-          fechaInicio: DateTime(2026, 2, 23), fechaFin: DateTime(2026, 3, 1),
-          produccionPorColor: {'Verde': 120, 'Azul': 200}, cerrada: true,
-        ),
-      ],
-    ),
-    Maquina(
-      id: 'M02', nombre: 'Máquina 2', trabajadorAsignado: 'María Quispe',
-      historialProduccion: [
-        RegistroSemana(
-          id: '2026-W09', 
-          fechaInicio: DateTime(2026, 2, 23), fechaFin: DateTime(2026, 3, 1),
-          produccionPorColor: {'Rojo': 180, 'Negro': 100}, cerrada: true,
-        ),
-      ],
-    ),
-    Maquina(
-      id: 'M03', nombre: 'Máquina 3', trabajadorAsignado: 'Carlos Condori',
-    ),
-    Maquina(
-      id: 'M04', nombre: 'Máquina 4', trabajadorAsignado: 'Ana Flores',
-    ),
-  ];
+  List<Maquina> _maquinas = [];
+  bool isLoading = true;
 
   List<Maquina> get maquinas => List.unmodifiable(_maquinas);
+
+  Future<void> cargarDesdeServidor() async {
+    isLoading = true;
+    notifyListeners();
+    try {
+      final List data = await ApiService.instance.obtenerProduccionCompleta();
+      _maquinas = data.map((e) {
+        final List h = e['historialProduccion'] ?? [];
+        return Maquina(
+          id: e['id'].toString(),
+          nombre: e['nombre'] ?? '',
+          trabajadorAsignado: e['trabajador_asignado'] ?? '',
+          historialProduccion: h.map((s) {
+            Map<String, double> pc = {};
+            if (s['produccionPorColor'] != null) {
+              final Map colores = s['produccionPorColor'];
+              colores.forEach((k, v) => pc[k.toString()] = double.tryParse(v.toString()) ?? 0.0);
+            }
+            return RegistroSemana(
+              id: s['id'],
+              fechaInicio: DateTime.parse(s['fechaInicio']),
+              fechaFin: DateTime.parse(s['fechaFin']),
+              cerrada: s['cerrada'],
+              produccionPorColor: pc,
+            );
+          }).toList(),
+        );
+      }).toList();
+      _asegurarSemanaAbierta();
+    } catch (e) {
+      debugPrint('Error cargando producción: $e');
+    }
+    isLoading = false;
+    notifyListeners();
+  }
 
   // Helpers para fechas (Semana Lunes-Domingo)
   static DateTime _obtenerLunes(DateTime d) {
@@ -198,30 +207,64 @@ class ProduccionService extends ChangeNotifier {
   }
 
   // ── Mutaciones ─────────────────────────────────────────────────────────
-  void registrarProduccionActual(String maquinaId, String color, double cantidadAgregada) {
+  Future<void> registrarProduccionActual(String maquinaId, String colorIn, double cantidadAgregada) async {
+    final String color = colorIn.trim().toUpperCase();
+    if (color.isEmpty || color == 'S/C') return; // Ignorar vacíos
+
     final mq = _maquinas.firstWhere((m) => m.id == maquinaId);
+    final actual = mq.semanaActual;
+    if (actual == null) return;
+    
     mq.sumarASemanaActual(color, cantidadAgregada);
-    notifyListeners();
+    notifyListeners(); // Actualización optimista
+    
+    try {
+      await ApiService.instance.registrarProduccion(
+        maquinaId: int.parse(maquinaId), 
+        semanaId: actual.id, 
+        fechaInicio: actual.fechaInicio.toIso8601String().split('T')[0], 
+        fechaFin: actual.fechaFin.toIso8601String().split('T')[0], 
+        color: color, 
+        cantidad: cantidadAgregada
+      );
+    } catch (e) {
+      debugPrint('Error en registro remoto: $e');
+    }
   }
 
-  void cerrarSemanaTodos() {
+  Future<void> cerrarSemanaTodos() async {
     for (var m in _maquinas) {
       if (m.semanaActual != null) {
         m.semanaActual!.cerrada = true;
       }
     }
-    // Automáticamente abrir la siguiente semana para todos
     _asegurarSemanaAbierta();
     notifyListeners();
+    
+    try {
+      await ApiService.instance.cerrarSemanasGlobal();
+    } catch (e) {
+      debugPrint('Error cerrando semanas: $e');
+    }
   }
 
-  void agregarMaquina(Maquina m) {
+  Future<void> agregarMaquina(Maquina m) async {
+    // Optimista
     _maquinas.add(m);
-    _asegurarSemanaAbierta(); // si se agrega, abrirle semana si no tiene
+    _asegurarSemanaAbierta();
     notifyListeners();
+
+    try {
+      await ApiService.instance.agregarMaquina(m.nombre, m.trabajadorAsignado);
+      // Reload para que M04 cambie por un Auto ID (8)
+      await cargarDesdeServidor();
+    } catch (e) {
+      debugPrint('Error agregando maquina: $e');
+    }
   }
 
   void editarMaquina(String id, String nuevoNombre, String nuevoTrabajador) {
+    // Pendiente: Endpoint de backend si el usuario pide. Solo modificamos local de forma temporal.
     final idx = _maquinas.indexWhere((m) => m.id == id);
     if (idx != -1) {
       _maquinas[idx].nombre = nuevoNombre;
@@ -231,6 +274,7 @@ class ProduccionService extends ChangeNotifier {
   }
 
   void eliminarMaquina(String id) {
+    // Pendiente: Endpoint de backend si el usuario pide. Solo modificamos local de forma temporal.
     _maquinas.removeWhere((m) => m.id == id);
     notifyListeners();
   }
